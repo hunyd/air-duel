@@ -286,7 +286,7 @@ export class Sword {
       const alpha = (1 - age1) * k * 0.6;
       if (alpha <= 0.01) continue;
       const in0 = lerpPt(p0.b, p0.a, (1 - age0) * 0.55), in1 = lerpPt(p1.b, p1.a, (1 - age1) * 0.55);
-      ctx.fillStyle = `rgba(${PAL.player},${alpha})`;
+      ctx.fillStyle = `rgba(${p1.tint || PAL.player},${alpha})`; // tint: 무효 공격 등에서 궤적 색 덮어쓰기
       ctx.beginPath();
       ctx.moveTo(in0.x, in0.y);
       ctx.lineTo(p0.b.x, p0.b.y);
@@ -307,7 +307,7 @@ export class Sword {
       const fade = 1 - (now - c.ts) / C.trailMs;
       if (k * fade <= 0.02) continue;
       const m0 = lerpPt(a.b, b.b, 0.5), m1 = lerpPt(b.b, c.b, 0.5);
-      ctx.strokeStyle = `rgba(${PAL.playerCore},${k * fade})`;
+      ctx.strokeStyle = `rgba(${c.tint || PAL.playerCore},${k * fade})`;
       ctx.lineWidth = 1 + 3 * fade;
       ctx.beginPath();
       ctx.moveTo(m0.x, m0.y);
