@@ -572,45 +572,49 @@ function drawReticle(c, g, t) {
   const span = (70 * Math.PI) / 180;
   c.save();
   c.lineCap = 'round';
-  // 내 가드: 지금 막고 있는 방향 한 호만 (빈 세 방향 호는 공격 방향 표시로 헷갈려서 뺌)
+  // 내 가드: 막고 있는 방향에만 흰 호 (한지 위에서도 보이게 먹 테두리)
   if (combat.guard) {
     const a = SIDE_ANG[combat.guard];
-    c.strokeStyle = `rgb(${PAL.player})`;
-    c.lineWidth = 8;
-    c.beginPath(); c.arc(rc.x, rc.y, rc.r, a - span / 2, a + span / 2); c.stroke();
+    for (const [col, lw] of [[`rgba(${PAL.ink},0.85)`, 13], ['rgb(255,255,255)', 8]]) {
+      c.strokeStyle = col; c.lineWidth = lw;
+      c.beginPath(); c.arc(rc.x, rc.y, rc.r, a - span / 2, a + span / 2); c.stroke();
+    }
   }
+  // 들어오는 공격: 진한 주홍. 바깥 호가 차오르고, 패링 타이밍(착지 직전)엔 굵어지며 깜빡임
   for (const inc of combat.incoming) {
     const p = Math.min(1, (t - inc.start) / inc.windup);
     const inWindow = inc.impactAt - t <= VS_CONFIG.parryWindow;
-    const blink = inWindow ? 0.5 + 0.5 * Math.sin(t / 30) : 1;
-    // 들어오는 공격 = 붉은색, 패링 타이밍(착지 직전) = 금색으로 깜빡임
-    const col = inWindow && inc.kind === 'slash' ? PAL.vital : PAL.enemy;
-    c.shadowColor = `rgba(${col},0.95)`;
-    c.shadowBlur = glow(20);
-    c.strokeStyle = `rgba(${col},${0.35 + 0.65 * blink})`;
+    const blink = inWindow ? 0.55 + 0.45 * Math.sin(t / 30) : 1;
+    const red = `rgba(${PAL.enemy},${blink})`;
     if (inc.kind === 'thrust') {
       // 가운데로 조여드는 마름모 = 가드 브레이크 (찌르기로 받아쳐야 함)
       const r = rc.r * (0.55 - 0.4 * p);
-      c.lineWidth = 5;
       c.beginPath();
       c.moveTo(rc.x, rc.y - r); c.lineTo(rc.x + r, rc.y); c.lineTo(rc.x, rc.y + r); c.lineTo(rc.x - r, rc.y);
-      c.closePath(); c.stroke();
-      c.fillStyle = `rgba(${PAL.enemy},${0.15 + 0.35 * p})`;
+      c.closePath();
+      c.fillStyle = `rgba(${PAL.enemy},${0.25 + 0.45 * p})`;
       c.fill();
+      c.strokeStyle = red; c.lineWidth = inWindow ? 9 : 6; c.stroke();
       continue;
     }
     const a = SIDE_ANG[inc.side];
-    c.lineWidth = inWindow ? 12 : 7;
-    c.beginPath(); c.arc(rc.x, rc.y, rc.r * 1.14, a - (span / 2) * p, a + (span / 2) * p); c.stroke();
-    // 안쪽을 가리키는 화살촉
-    const tip = { x: rc.x + Math.cos(a) * rc.r * 1.3, y: rc.y + Math.sin(a) * rc.r * 1.3 };
-    const d = { x: -Math.cos(a), y: -Math.sin(a) }, n = { x: -d.y, y: d.x }, h = g.s * 0.04;
-    c.lineWidth = 4;
+    const R = rc.r * 1.14;
+    // 바탕 호(옅게) → 차오르는 호(진하게)
+    c.strokeStyle = `rgba(${PAL.enemy},0.22)`;
+    c.lineWidth = 10;
+    c.beginPath(); c.arc(rc.x, rc.y, R, a - span / 2, a + span / 2); c.stroke();
+    c.strokeStyle = red;
+    c.lineWidth = inWindow ? 16 : 10;
+    c.beginPath(); c.arc(rc.x, rc.y, R, a - (span / 2) * p, a + (span / 2) * p); c.stroke();
+    // 안쪽을 가리키는 꽉 찬 화살촉
+    const tip = { x: rc.x + Math.cos(a) * rc.r * 1.26, y: rc.y + Math.sin(a) * rc.r * 1.26 };
+    const d = { x: -Math.cos(a), y: -Math.sin(a) }, nn = { x: -d.y, y: d.x }, h = g.s * (inWindow ? 0.07 : 0.055);
+    c.fillStyle = red;
     c.beginPath();
-    c.moveTo(tip.x - d.x * h + n.x * h, tip.y - d.y * h + n.y * h);
-    c.lineTo(tip.x + d.x * h * 0.3, tip.y + d.y * h * 0.3);
-    c.lineTo(tip.x - d.x * h - n.x * h, tip.y - d.y * h - n.y * h);
-    c.stroke();
+    c.moveTo(tip.x - d.x * h * 1.6 + nn.x * h, tip.y - d.y * h * 1.6 + nn.y * h);
+    c.lineTo(tip.x + d.x * h * 0.2, tip.y + d.y * h * 0.2);
+    c.lineTo(tip.x - d.x * h * 1.6 - nn.x * h, tip.y - d.y * h * 1.6 - nn.y * h);
+    c.closePath(); c.fill();
   }
   c.restore();
 }
