@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Air Duel Versus</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="versus.css">
+  <!-- WebRTC P2P (무료 공개 중계 서버로 연결만 맺고, 데이터는 브라우저끼리 직접) -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <canvas id="world" class="layer"></canvas>
+  <canvas id="sword" class="layer"></canvas>
+  <canvas id="skeleton" class="layer"></canvas>
+
+  <div id="ui">
+    <header id="topbar" data-mode="DUEL">
+      <div class="duel-only hp glass" id="hp-you">
+        <span class="hp-label">YOU</span>
+        <div class="hp-track"><div class="hp-fill" id="hp-you-fill"></div></div>
+      </div>
+      <div class="center glass" id="center-stat">
+        <span id="stat-main">VERSUS</span>
+        <span id="stat-sub">—</span>
+      </div>
+      <div class="duel-only hp glass right" id="hp-rival">
+        <div class="hp-track"><div class="hp-fill" id="hp-rival-fill"></div></div>
+        <span class="hp-label">RIVAL</span>
+      </div>
+    </header>
+
+    <div id="cam" class="glass">
+      <video id="video" autoplay muted playsinline></video>
+      <canvas id="cam-skeleton"></canvas>
+    </div>
+
+    <div id="banner"></div>
+    <div id="hint"></div>
+    <div id="stun-vignette"></div>
+
+    <!-- 로비 -->
+    <div id="lobby" class="glass">
+      <div id="lobby-title">VERSUS</div>
+      <div id="lobby-sub">Online 1 vs 1 · each player on their own webcam</div>
+
+      <div id="lobby-start">
+        <button class="pbtn" id="btn-create" type="button"><span>CREATE ROOM</span></button>
+        <div class="or">or join with a code</div>
+        <form id="join-form" autocomplete="off">
+          <input id="join-code" maxlength="4" placeholder="CODE" spellcheck="false" aria-label="Room code">
+          <button class="pbtn" id="btn-join" type="submit"><span>JOIN</span></button>
+        </form>
+      </div>
+
+      <div id="lobby-wait" hidden>
+        <div class="code-label">ROOM CODE</div>
+        <div id="room-code">----</div>
+        <button class="pbtn" id="btn-copy" type="button"><span>COPY INVITE LINK</span></button>
+        <div class="or" id="wait-text">Waiting for opponent…</div>
+      </div>
+
+      <div id="lobby-over" hidden>
+        <div id="over-title">VICTORY</div>
+        <div id="over-sub"></div>
+        <button class="pbtn" id="btn-rematch" type="button"><span>REMATCH</span></button>
+      </div>
+
+      <a class="back" href="../">← Single player</a>
+    </div>
+
+    <nav id="dock" class="glass">
+      <div class="item" data-g="GRIP" title="Make a fist">
+        <svg viewBox="0 0 24 24"><path d="M7 11V8.5a1.5 1.5 0 0 1 3 0V10M10 10V7.5a1.5 1.5 0 0 1 3 0V10M13 10V8a1.5 1.5 0 0 1 3 0v2.5M16 10.5a1.5 1.5 0 0 1 3 0V13a6.5 6.5 0 0 1-6.5 6.5h-1A6.5 6.5 0 0 1 5 13v-1.5a1.5 1.5 0 0 1 3 0V13"/></svg>
+        <span>GRIP</span>
+      </div>
+      <div class="item" data-g="GUARD" title="Tilt your blade: left / top / right">
+        <svg viewBox="0 0 24 24"><path d="M12 3l7 3v5.5c0 4.6-3 8-7 9.5-4-1.5-7-4.9-7-9.5V6z"/></svg>
+        <span id="guard-label">GUARD</span>
+      </div>
+      <div class="item" data-g="SLASH" title="Swing fast: → ← ↓">
+        <svg viewBox="0 0 24 24"><path d="M20 4 9 15"/><path d="M7.5 13.5l3 3"/><path d="M8 16l-3 3"/><path d="M3 11a12 12 0 0 0 10 10"/></svg>
+        <span>ATTACK</span>
+      </div>
+      <div class="item" data-g="THRUST" title="Push your fist toward the camera">
+        <svg viewBox="0 0 24 24"><circle cx="16" cy="12" r="5"/><circle cx="16" cy="12" r="1.2"/><path d="M2 12h9"/><path d="M8 9l3 3-3 3"/></svg>
+        <span>BREAK</span>
+      </div>
+    </nav>
+
+    <div id="status" class="glass">
+      <span id="status-dot"></span>
+      <span id="status-text">Starting…</span>
+      <button id="status-retry" type="button" hidden>Retry</button>
+    </div>
+
+    <pre id="debug" class="glass hidden"></pre>
+  </div>
+
+  <script type="module" src="versus.js"></script>
+</body>
+</html>
