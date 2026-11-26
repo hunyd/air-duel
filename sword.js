@@ -283,9 +283,10 @@ export class Sword {
       if (p0.seg !== p1.seg) continue;
       const age0 = (now - p0.ts) / C.trailMs, age1 = (now - p1.ts) / C.trailMs;
       const k = Math.min(1, p1.speed / C.slashIn);
-      const alpha = (1 - age1) * k * 0.6;
+      const alpha = Math.min(1, (1 - age1) * k * (p1.boost ? 1 : 0.6)); // boost: 공격 판정된 궤적은 더 진하게
       if (alpha <= 0.01) continue;
-      const in0 = lerpPt(p0.b, p0.a, (1 - age0) * 0.55), in1 = lerpPt(p1.b, p1.a, (1 - age1) * 0.55);
+      const reach = p1.boost ? 0.8 : 0.55; // boost: 궤적 면을 칼 안쪽까지 넓게
+      const in0 = lerpPt(p0.b, p0.a, (1 - age0) * reach), in1 = lerpPt(p1.b, p1.a, (1 - age1) * reach);
       ctx.fillStyle = `rgba(${p1.tint || PAL.player},${alpha})`; // tint: 무효 공격 등에서 궤적 색 덮어쓰기
       ctx.beginPath();
       ctx.moveTo(in0.x, in0.y);
@@ -308,7 +309,7 @@ export class Sword {
       if (k * fade <= 0.02) continue;
       const m0 = lerpPt(a.b, b.b, 0.5), m1 = lerpPt(b.b, c.b, 0.5);
       ctx.strokeStyle = `rgba(${c.tint || PAL.player},${k * fade})`;
-      ctx.lineWidth = 1 + 3 * fade;
+      ctx.lineWidth = (1 + 3 * fade) * (c.boost ? 2.5 : 1);
       ctx.beginPath();
       ctx.moveTo(m0.x, m0.y);
       ctx.quadraticCurveTo(b.b.x, b.b.y, m1.x, m1.y);
