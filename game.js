@@ -1,6 +1,6 @@
 // 게임 로직: DUEL(패링 후 베기) / SLICE(날아오는 오브젝트 베기)
 import { sweepHitsCircle, segSegDist, angleDiff180, lerpPt, dist, norm } from './sword.js';
-import { PAL } from './palette.js';
+import { PAL, glow } from './palette.js';
 
 export const GAME_CONFIG = {
   slice: {
@@ -158,7 +158,7 @@ export class FX {
       ctx.closePath();
     };
     ctx.shadowColor = `rgba(${o.color},0.95)`;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = glow(18);
     ctx.fillStyle = `rgba(${o.color},${0.75 * fade})`;
     crescent(w);
     ctx.fill();
@@ -185,7 +185,7 @@ export class FX {
     lance.addColorStop(0.25, `rgba(${o.color},${0.85 * fade})`);
     lance.addColorStop(1, `rgba(${o.color},0)`);
     ctx.shadowColor = `rgba(${o.color},1)`;
-    ctx.shadowBlur = 24;
+    ctx.shadowBlur = glow(24);
     ctx.fillStyle = lance;
     ctx.beginPath();
     ctx.moveTo(-w * 0.6, 0);
@@ -245,7 +245,7 @@ export class FX {
     path(r);
     ctx.fill();
     ctx.shadowColor = `rgba(${o.color},1)`;
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = glow(20);
     ctx.lineJoin = 'round';
     ctx.strokeStyle = `rgba(${o.color},${fade})`;
     ctx.lineWidth = 5;
@@ -272,7 +272,7 @@ export class FX {
     for (const o of this.shields) this.renderShield(ctx, o);
     for (const o of this.slashes) this.renderSlash(ctx, o);
     for (const o of this.beams) this.renderBeam(ctx, o);
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = glow(8);
     for (const p of this.parts) {
       const k = p.life / p.max;
       ctx.shadowColor = `rgba(${p.color},0.9)`;
@@ -332,7 +332,7 @@ function drawObject(ctx, o) {
   ctx.translate(o.x, o.y);
   ctx.rotate(o.rot);
   ctx.shadowColor = 'rgba(255,255,255,0.7)';
-  ctx.shadowBlur = 14;
+  ctx.shadowBlur = glow(14);
   shapePath(ctx, o.bomb ? 'circle' : o.shape, o.r);
   ctx.fillStyle = o.bomb ? 'rgba(15,16,20,0.62)' : 'rgba(255,255,255,0.2)';
   ctx.fill();
@@ -543,7 +543,7 @@ export function drawFigure(ctx, geo, blade, { alpha = 1, tilt = 0, flash = 0 } =
   lines([[[-0.018, -0.345], [0.018, -0.345]], [[-0.012, -0.333], [0.012, -0.333]]], INK, ink * 0.6);
   ctx.save();
   ctx.shadowColor = `rgba(${PAL.enemy},1)`;
-  ctx.shadowBlur = s * 0.03;
+  ctx.shadowBlur = glow(s * 0.03);
   ctx.fillStyle = `rgb(${PAL.enemyCore})`;
   for (const x of [-0.019, 0.019]) {
     const e = P(x, -0.385);
@@ -604,7 +604,7 @@ export function drawFigure(ctx, geo, blade, { alpha = 1, tilt = 0, flash = 0 } =
   bladeGrad.addColorStop(1, `rgb(${PAL.enemy})`);
   ctx.save();
   ctx.shadowColor = `rgba(${PAL.enemy},0.95)`;
-  ctx.shadowBlur = s * 0.035 + flash * 20;
+  ctx.shadowBlur = glow(s * 0.035 + flash * 20);
   path([at(0.04, 0.013), at(bl - 0.06, 0.011), tip, at(bl - 0.025, -0.011), at(0.04, -0.013)]);
   ctx.fillStyle = bladeGrad;
   ctx.fill();
@@ -1195,7 +1195,7 @@ export class Game {
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(vc.x, vc.y, vc.r, 0, Math.PI * 2); ctx.stroke();
       ctx.shadowColor = `rgba(${PAL.vital},0.95)`;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = glow(16);
       ctx.strokeStyle = `rgb(${PAL.vital})`;
       // 조여드는 링 2개
       for (const k of [t, (t + 0.5) % 1]) {
@@ -1225,7 +1225,7 @@ export class Game {
       }
       // 남은 시간
       ctx.lineWidth = 2.5;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = glow(6);
       ctx.beginPath(); ctx.arc(vc.x, vc.y, vc.r * 1.1, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * left); ctx.stroke();
       ctx.restore();
     }
@@ -1245,14 +1245,14 @@ export class Game {
       ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
       // 급소 호
       ctx.shadowColor = `rgba(${PAL.vital},0.95)`;
-      ctx.shadowBlur = 16 + pulse * 14;
+      ctx.shadowBlur = glow(16 + pulse * 14);
       ctx.strokeStyle = `rgb(${PAL.vital})`;
       ctx.lineWidth = 6 + pulse * 2;
       const span = (Math.PI / 2) * 0.85;
       ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, V.arc - span / 2, V.arc + span / 2); ctx.stroke();
       // 남은 시간: 호 바깥쪽 얇은 선
       ctx.lineWidth = 2.5;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = glow(6);
       ctx.beginPath(); ctx.ellipse(cx, cy, rx * 1.1, ry * 1.1, 0, V.arc - (span / 2) * left, V.arc + (span / 2) * left); ctx.stroke();
       // 휘두를 방향 화살표 (바깥 → 안쪽)
       const p = this.vitalPos(geo);
@@ -1262,7 +1262,7 @@ export class Game {
       const tail = { x: p.x - d.x * (back + L), y: p.y - d.y * (back + L) };
       const head = { x: p.x - d.x * back * 0.35, y: p.y - d.y * back * 0.35 };
       ctx.lineWidth = 4;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = glow(12);
       ctx.beginPath();
       ctx.moveTo(tail.x, tail.y); ctx.lineTo(head.x, head.y);
       const hw = s * 0.045;
@@ -1283,7 +1283,7 @@ export class Game {
       const near = e.closeness || 0;
       // 상대 공격은 붉게, 내 칼이 제자리에 들어오면 청백색으로 빛남
       ctx.shadowColor = near >= 1 ? `rgba(${PAL.player},1)` : `rgba(${PAL.enemy},0.9)`;
-      ctx.shadowBlur = 10 + near * 18;
+      ctx.shadowBlur = glow(10 + near * 18);
       ctx.setLineDash([12, 10]);
       ctx.lineDashOffset = -this.clock / 20;
       ctx.strokeStyle = `rgba(${PAL.enemy},${0.35 + 0.35 * p + urgent * 0.25})`;

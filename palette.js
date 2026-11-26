@@ -11,3 +11,7 @@ export const PAL = {
 };
 
 export const rgba = (rgb, a) => `rgba(${rgb},${a})`;
+
+// 발광(shadowBlur) 강도 배율: 0 = 끔, 1 = 원래 강도. canvas 2D의 shadowBlur는 그리기마다 블러를 계산해 비싸다.
+export const GLOW = 0.35;
+export const glow = (px) => px * GLOW;

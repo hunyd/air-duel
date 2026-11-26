@@ -1,5 +1,5 @@
 // 칼: 손 위치 → 칼자루/칼날, One Euro Filter smoothing, 궤적, 스윕 충돌 판정
-import { PAL } from './palette.js';
+import { PAL, glow } from './palette.js';
 
 export const SWORD_CONFIG = {
   bladePalm: 4.6,     // 칼 길이 = 손바닥 길이(px) × 이 값
@@ -299,7 +299,7 @@ export class Sword {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.shadowColor = `rgba(${PAL.player},1)`;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = glow(12);
     for (let i = 2; i < tr.length; i++) {
       const a = tr[i - 2], b = tr[i - 1], c = tr[i];
       if (a.seg !== c.seg) continue;
@@ -324,7 +324,7 @@ export class Sword {
 
       ctx.save();
       ctx.shadowColor = `rgba(${PAL.player},0.95)`;
-      ctx.shadowBlur = this.slashing ? 28 : this.guarding ? 20 : 14;
+      ctx.shadowBlur = glow(this.slashing ? 28 : this.guarding ? 20 : 14);
 
       // 손잡이: 짧고 어둡게(남색) + 감은 끈 무늬 → 청백 칼날과 확실히 구분
       const pom = { x: hilt.x - d.x * this.palmPx * C.pommel, y: hilt.y - d.y * this.palmPx * C.pommel };
@@ -405,7 +405,7 @@ export class Sword {
         ctx.fillStyle = grd;
         ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, Math.PI * 2); ctx.fill();
       }
-      ctx.shadowBlur = this.slashing ? 28 : 14;
+      ctx.shadowBlur = glow(this.slashing ? 28 : 14);
 
       // 코등이: 손잡이와 날 사이의 둥근 원판
       ctx.save();
