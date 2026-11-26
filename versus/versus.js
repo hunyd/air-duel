@@ -8,16 +8,17 @@ import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
 import { Bot } from './bot.js';
 import { PAL, glow } from '../palette.js';
+import { drawHand } from '../hand.js';
 
 // 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
-const SPEED_OK = '120,240,190';
-const FIZZLE = '150,156,168'; // 무효 공격 궤적
+const SPEED_OK = '46,150,112';
+const FIZZLE = '128,124,126'; // 무효 공격 궤적
 const UI = {
   poseHz: 15,            // 상대에게 내 칼 자세를 보내는 빈도
   countdownMs: 3000,
   roundEndMs: 2200,
   pingMs: 2000,
-  mainSkeletonScale: 0.6,
+  mainSkeletonScale: 0.8,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -108,10 +109,11 @@ function drawSkeleton() {
   if (!hand) return;
   drawBones(ctx.cam, hand.mini, 1.2, 1.8, 0.95);
   if (showSkeleton) {
-    const c = [0, 5, 9, 13, 17].reduce((a, i) => ({ x: a.x + hand.pts[i].x / 5, y: a.y + hand.pts[i].y / 5 }), { x: 0, y: 0 });
-    const k = UI.mainSkeletonScale;
-    drawBones(ctx.skeleton, hand.pts.map((p) => ({ x: c.x + (p.x - c.x) * k, y: c.y + (p.y - c.y) * k })), 1.2, 2, 0.45);
+    // 메인 화면: 손 형태로. 칼을 쥐고 있으면 칼자루를 중심으로 축소해서 손이 칼을 감싸 쥐게
+    const c = sword.active ? sword.hilt : [0, 5, 9, 13, 17].reduce((a, i) => ({ x: a.x + hand.pts[i].x / 5, y: a.y + hand.pts[i].y / 5 }), { x: 0, y: 0 });
+    drawHand(ctx.skeleton, hand.pts, c, UI.mainSkeletonScale);
   }
+
 }
 
 // ---------- 네트워크 & 매치 ----------
@@ -482,14 +484,14 @@ function drawGauge(c, g, t, dt) {
 
   c.save();
   // 바탕 + 무효 구간(빗금)
-  c.fillStyle = 'rgba(10,12,16,0.55)';
+  c.fillStyle = 'rgba(250,246,236,0.9)';
   c.fillRect(x0 - 3, y - 3, w + 6, h + 6);
   const xa = X(VS_CONFIG.speedMin), xb = X(VS_CONFIG.speedMax);
-  c.fillStyle = 'rgba(255,255,255,0.08)';
+  c.fillStyle = `rgba(${PAL.ink},0.08)`;
   c.fillRect(x0, y, w, h);
   c.save();
   c.beginPath(); c.rect(x0, y, xa - x0, h); c.rect(xb, y, x0 + w - xb, h); c.clip();
-  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.strokeStyle = `rgba(${PAL.ink},0.3)`;
   c.lineWidth = 1;
   for (let x = x0 - h; x < x0 + w; x += 6) { c.beginPath(); c.moveTo(x, y + h); c.lineTo(x + h, y); c.stroke(); }
   c.restore();
@@ -502,19 +504,19 @@ function drawGauge(c, g, t, dt) {
   const note = gaugeNote && t < gaugeNote.until ? gaugeNote : null;
   if (note?.reason) nx += Math.sin(t / 18) * 3 * (1 - (t - note.at) / 500); // 무효: 벗어난 쪽에서 흔들림
   const bad = needle > VS_CONFIG.speedMax || (needle > 1.15 && needle < VS_CONFIG.speedMin);
-  c.fillStyle = bad ? `rgb(${FIZZLE})` : '#fff';
+  c.fillStyle = bad ? `rgb(${FIZZLE})` : `rgb(${PAL.ink})`;
   c.fillRect(nx - 1.5, y - 5, 3, h + 10);
   // 스태미나 (가는 막대)
   const sy = y + h + 6, sh = Math.max(3, h * 0.4);
   const ratio = combat.stamina / VS_CONFIG.stamina.max;
-  c.fillStyle = 'rgba(255,255,255,0.1)';
+  c.fillStyle = `rgba(${PAL.ink},0.1)`;
   c.fillRect(x0, sy, w, sh);
   const blink = combat.exhausted ? 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t / 70)) : 1;
   c.fillStyle = combat.exhausted ? `rgba(${FIZZLE},${blink})` : `rgba(${PAL.player},0.9)`;
   c.fillRect(x0, sy, w * ratio, sh);
   // 오른쪽 문구: 무효 / 스턴 / 탈진 (중앙 배너 대신 게이지 옆)
   let label = note, col;
-  if (!label && combat.stunned(t)) label = { text: 'STUNNED', color: '210,190,255' };
+  if (!label && combat.stunned(t)) label = { text: 'STUNNED', color: '96,64,150' };
   if (!label && combat.exhausted) label = { text: 'EXHAUSTED', color: FIZZLE };
   if (label) {
     col = label.color;
@@ -561,7 +563,7 @@ function drawReticle(c, g, t) {
     // 내 가드 = 청백
     c.shadowColor = `rgba(${PAL.player},0.9)`;
     c.shadowBlur = mine ? glow(16) : 0;
-    c.strokeStyle = mine ? `rgb(${PAL.playerCore})` : 'rgba(255,255,255,0.22)';
+    c.strokeStyle = mine ? `rgb(${PAL.player})` : `rgba(${PAL.ink},0.2)`;
     c.lineWidth = mine ? 8 : 3;
     c.beginPath(); c.arc(rc.x, rc.y, rc.r, a - span / 2, a + span / 2); c.stroke();
   }

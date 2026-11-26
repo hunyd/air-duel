@@ -12,7 +12,7 @@
   pointer-events: auto;
 }
 #lobby.hidden { display: none; }
-#lobby-title { font-size: 30px; font-weight: 800; letter-spacing: 0.18em; }
+#lobby-title { font-family: var(--brush); font-size: 40px; font-weight: 400; letter-spacing: 0.12em; }
 #lobby-sub { margin-top: 6px; font-size: 13px; color: var(--white-dim); letter-spacing: 0.04em; }
 #lobby-start, #lobby-wait, #lobby-over { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
 #lobby [hidden] { display: none; }
@@ -26,7 +26,7 @@
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(250, 246, 236, 0.9);
   color: var(--white);
   font: 700 18px var(--font);
   letter-spacing: 0.4em;
@@ -34,8 +34,8 @@
   text-transform: uppercase;
   outline: none;
 }
-#join-code::placeholder { color: rgba(255, 255, 255, 0.35); }
-#join-code:focus { border-color: #fff; background: rgba(255, 255, 255, 0.14); }
+#join-code::placeholder { color: rgba(24, 21, 23, 0.35); }
+#join-code:focus { border-color: var(--ink); background: #fff; }
 #btn-join { flex: none; }
 
 .code-label { font-size: 11px; font-weight: 700; letter-spacing: 0.2em; color: var(--white-dim); }
@@ -44,11 +44,12 @@
   font-weight: 800;
   letter-spacing: 0.3em;
   padding-left: 0.3em;
-  text-shadow: 0 0 24px rgba(255, 255, 255, 0.6);
+  font-family: var(--brush);
+  font-weight: 400;
   user-select: all;
 }
 
-#over-title { font-size: 34px; font-weight: 800; letter-spacing: 0.16em; }
+#over-title { font-family: var(--brush); font-size: 44px; font-weight: 400; letter-spacing: 0.1em; }
 #over-sub { font-size: 14px; color: var(--white-dim); }
 
 .back {
