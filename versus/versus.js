@@ -43,7 +43,7 @@ function coverInto(box, W, H, vw, vh) {
 }
 function layout() {
   view.W = innerWidth; view.H = innerHeight;
-  view.dpr = Math.min(devicePixelRatio || 1, 2);
+  view.dpr = Math.min(devicePixelRatio || 1, 1); // 레티나 2배 그리기는 비용이 약 3배 → 1배로 제한
   view.diag = Math.hypot(view.W, view.H);
   for (const c of Object.values(canvases)) { c.width = Math.round(view.W * view.dpr); c.height = Math.round(view.H * view.dpr); }
   const r = $('cam').getBoundingClientRect();
