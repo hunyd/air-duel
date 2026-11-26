@@ -61,15 +61,35 @@
 }
 .back:hover { color: var(--white); }
 
+/* 진탕(스턴): 발로란트 브리치의 진탕처럼 화면이 흔들리고 흐려지며 파동이 울린다 */
 #stun-vignette {
   position: absolute;
   inset: 0;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.15s;
-  box-shadow: inset 0 0 160px 40px rgba(255, 48, 64, 0.35); /* 경직 = 피격색 */
+  transition: opacity 0.12s;
+  background:
+    radial-gradient(circle at 50% 45%, transparent 30%, rgba(190, 170, 255, 0.18) 55%, transparent 70%),
+    radial-gradient(circle at 50% 45%, transparent 55%, rgba(30, 20, 60, 0.55) 100%);
+  background-size: 100% 100%, 100% 100%;
 }
-#stun-vignette.show { opacity: 1; }
+#stun-vignette.show { opacity: 1; animation: concuss-ring 0.32s ease-out infinite; }
+@keyframes concuss-ring {
+  0% { background-size: 70% 70%, 100% 100%; background-position: center, center; }
+  100% { background-size: 160% 160%, 100% 100%; background-position: center, center; }
+}
+body.concussed #world,
+body.concussed #sword {
+  filter: blur(1.6px) saturate(0.6) contrast(1.15);
+  animation: concuss-wobble 0.14s ease-in-out infinite alternate;
+}
+@keyframes concuss-wobble {
+  from { transform: translate(-4px, 2px) rotate(-0.4deg) scale(1.01); }
+  to { transform: translate(4px, -2px) rotate(0.4deg) scale(1.01); }
+}
+
+/* 탈진: 흔들림 없이 색만 빠지고 무거워짐 (진탕과 구분) */
+body.exhausted #sword { filter: grayscale(0.8) brightness(0.85); }
 
 /* 로비가 떠 있을 때는 제스처 도크 숨김 (좁은 화면에서 겹침 방지) */
 #lobby:not(.hidden) ~ #dock { display: none; }

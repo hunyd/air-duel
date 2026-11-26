@@ -8,6 +8,9 @@ import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
 import { PAL, glow } from '../palette.js';
 
+// 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
+const SPEED_OK = '120,240,190';
+const FIZZLE = '150,156,168'; // 무효 공격 궤적
 const UI = {
   poseHz: 15,            // 상대에게 내 칼 자세를 보내는 빈도
   countdownMs: 3000,
@@ -300,6 +303,17 @@ function handleEvents(t) {
   for (const e of combat.events.splice(0)) {
     if (e.type === 'launch') {
       lastLaunch = t;
+      okFlashUntil = t + 250;
+    } else if (e.type === 'fizzle') {
+      // 무효 공격: 궤적을 회색으로, 게이지 옆에 TOO FAST / TOO SLOW
+      for (const p of sword.trail) p.tint = FIZZLE;
+      if (sword.active) fx.sparks(sword.tip.x, sword.tip.y, 10, g.s * 0.6, null, Math.PI * 2, FIZZLE);
+      gaugeNote = { text: e.reason === 'fast' ? 'TOO FAST' : 'TOO SLOW', color: FIZZLE, reason: e.reason, at: t, until: t + 600 };
+      needle = e.peak;
+    } else if (e.type === 'stun') {
+      frozenPose = sword.active ? { hilt: { ...sword.hilt }, base: { ...sword.base }, tip: { ...sword.tip } } : null;
+    } else if (e.type === 'exhausted') {
+      showBanner('EXHAUSTED', 700, true);
     } else if (e.type === 'defense') {
       const p = sidePoint(e.side);
       if (e.outcome === 'hit') {
@@ -321,6 +335,12 @@ function handleEvents(t) {
       } else if (e.outcome === 'counter') {
         fx.sparks(p.x, p.y, 26, g.s * 1.8, null, Math.PI * 2, PAL.spark); fx.ring(p.x, p.y, 10, g.s * 0.3, 0.35, 4, PAL.player);
         showBanner('COUNTER!', 700, true);
+      } else if (e.outcome === 'clash') {
+        fx.sparks(p.x, p.y, 30, g.s * 2, null, Math.PI * 2, PAL.spark); fx.ring(p.x, p.y, 10, g.s * 0.3, 0.35, 4, PAL.spark); fx.kick(9); fx.stop(80);
+        showBanner('CLASH', 600, true);
+      } else if (e.outcome === 'crush') {
+        fx.crack(p.x, p.y, g.s * 0.18, PAL.hurt); fx.flash = 0.45; fx.flashColor = PAL.hurt; fx.kick(10);
+        showBanner(`GUARD CRUSHED −${e.dmg}`, 800, true);
       }
     } else if (e.type === 'attackResult') {
       const p = lerpPt(sidePoint(e.side ?? 'CENTER', 0.5), sidePoint('CENTER'), 0.4);
@@ -332,7 +352,7 @@ function handleEvents(t) {
         showBanner('HIT', 450, true);
       } else if (e.outcome === 'block') {
         fx.shield(p.x, p.y, g.s * 0.08, PAL.enemy, 0.3);
-        fx.sparks(p.x, p.y, 12, g.s, null, Math.PI * 2, PAL.spark); showBanner('BLOCKED', 500, true);
+        fx.sparks(p.x, p.y, 12, g.s, null, Math.PI * 2, PAL.spark); showBanner('BLOCKED — STUNNED', 650, true);
       } else if (e.outcome === 'parry') {
         fx.flash = 0.4; fx.flashColor = PAL.hurt; fx.kick(10); showBanner('PARRIED — STUNNED', 900, true);
       } else if (e.outcome === 'break') {
@@ -340,6 +360,8 @@ function handleEvents(t) {
       } else if (e.outcome === 'counter') {
         fx.sparks(p.x, p.y, 20, g.s * 1.4, null, Math.PI * 2, PAL.spark);
         showBanner('COUNTERED', 700, true);
+      } else if (e.outcome === 'crush') {
+        oppFlash = 0.7; fx.sparks(p.x, p.y, 16, g.s * 1.4, null, Math.PI * 2, PAL.vital); showBanner('GUARD CRUSHED', 700, true);
       }
     } else if (e.type === 'dead') {
       if (isHost()) hostOnDeath('host');
@@ -407,12 +429,97 @@ function renderWorld(t, dt) {
     c.textAlign = 'center';
     c.shadowColor = `rgba(${PAL.vital},0.9)`;
     c.shadowBlur = glow(12);
-    c.fillText('OPENING', g.ex, g.ey + 0.56 * g.s); // 발 아래: 위쪽 공격 표시와 겹치지 않게
+    c.textAlign = 'right';
+    c.fillText('OPENING', g.ex - gaugeW(g) / 2 - 14, gaugeY(g) + g.s * 0.017); // 게이지 왼쪽: 위쪽 공격 표시와 겹치지 않게
     c.restore();
   }
-  if (match.phase === 'fight') drawReticle(c, g, t);
+  if (match.phase === 'fight') { drawReticle(c, g, t); drawGauge(c, g, t, dt); }
   fx.render(c, view);
   c.restore();
+}
+
+// ---------- 휘두르기 속도 게이지 + 스태미나 (상대 발 아래, 시선 가까이) ----------
+const gaugeY = (g) => g.ey + 0.5 * g.s;
+const gaugeW = (g) => Math.min(g.s * 0.62, view.W * 0.5);
+let needle = 0;        // 표시용 속도 (최고값을 잠깐 붙잡았다가 내려옴)
+let gaugeNote = null;  // { text, color, until, reason, at }
+let okFlashUntil = 0;
+
+function drawGauge(c, g, t, dt) {
+  const max = VS_CONFIG.speedGaugeMax;
+  const w = gaugeW(g), h = Math.max(8, g.s * 0.02);
+  const x0 = g.ex - w / 2, y = gaugeY(g);
+  const X = (v) => x0 + (Math.min(max, Math.max(0, v)) / max) * w;
+  const live = sword.active && !combat.stunned(t) ? sword.speed : 0;
+  needle = Math.max(live, needle * Math.exp(-dt * 2.5));
+
+  c.save();
+  // 바탕 + 무효 구간(빗금)
+  c.fillStyle = 'rgba(10,12,16,0.55)';
+  c.fillRect(x0 - 3, y - 3, w + 6, h + 6);
+  const xa = X(VS_CONFIG.speedMin), xb = X(VS_CONFIG.speedMax);
+  c.fillStyle = 'rgba(255,255,255,0.08)';
+  c.fillRect(x0, y, w, h);
+  c.save();
+  c.beginPath(); c.rect(x0, y, xa - x0, h); c.rect(xb, y, x0 + w - xb, h); c.clip();
+  c.strokeStyle = 'rgba(255,255,255,0.18)';
+  c.lineWidth = 1;
+  for (let x = x0 - h; x < x0 + w; x += 6) { c.beginPath(); c.moveTo(x, y + h); c.lineTo(x + h, y); c.stroke(); }
+  c.restore();
+  // 유효 구간 (민트)
+  const ok = t < okFlashUntil;
+  c.fillStyle = `rgba(${SPEED_OK},${ok ? 0.95 : 0.55})`;
+  c.fillRect(xa, y, xb - xa, h);
+  // 바늘
+  let nx = X(needle);
+  const note = gaugeNote && t < gaugeNote.until ? gaugeNote : null;
+  if (note?.reason) nx += Math.sin(t / 18) * 3 * (1 - (t - note.at) / 500); // 무효: 벗어난 쪽에서 흔들림
+  const bad = needle > VS_CONFIG.speedMax || (needle > 1.15 && needle < VS_CONFIG.speedMin);
+  c.fillStyle = bad ? `rgb(${FIZZLE})` : '#fff';
+  c.fillRect(nx - 1.5, y - 5, 3, h + 10);
+  // 스태미나 (가는 막대)
+  const sy = y + h + 6, sh = Math.max(3, h * 0.4);
+  const ratio = combat.stamina / VS_CONFIG.stamina.max;
+  c.fillStyle = 'rgba(255,255,255,0.1)';
+  c.fillRect(x0, sy, w, sh);
+  const blink = combat.exhausted ? 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t / 70)) : 1;
+  c.fillStyle = combat.exhausted ? `rgba(${FIZZLE},${blink})` : `rgba(${PAL.player},0.9)`;
+  c.fillRect(x0, sy, w * ratio, sh);
+  // 오른쪽 문구: 무효 / 스턴 / 탈진 (중앙 배너 대신 게이지 옆)
+  let label = note, col;
+  if (!label && combat.stunned(t)) label = { text: 'STUNNED', color: '210,190,255' };
+  if (!label && combat.exhausted) label = { text: 'EXHAUSTED', color: FIZZLE };
+  if (label) {
+    col = label.color;
+    c.font = `800 ${Math.round(g.s * 0.034)}px ${getComputedStyle(document.body).fontFamily}`;
+    c.textAlign = 'left';
+    c.fillStyle = `rgb(${col})`;
+    c.fillText(label.text, x0 + w + 14, y + h);
+  }
+  c.restore();
+}
+
+// 내 칼: 스턴 중에는 굳었다가(freeze) 실제 손 위치로 부드럽게 돌아간다(recover) → 순간이동 없음
+let frozenPose = null;
+function renderMySword(t) {
+  const live = { hilt: sword.hilt, base: sword.base, tip: sword.tip };
+  let shown = null;
+  if (frozenPose && t < combat.stunnedUntil && sword.active) {
+    if (t < combat.stunFreezeUntil) shown = frozenPose;
+    else {
+      const k = (t - combat.stunFreezeUntil) / (combat.stunnedUntil - combat.stunFreezeUntil);
+      const e = 1 - Math.pow(1 - Math.min(1, k), 3);
+      shown = { hilt: lerpPt(frozenPose.hilt, live.hilt, e), base: lerpPt(frozenPose.base, live.base, e), tip: lerpPt(frozenPose.tip, live.tip, e) };
+    }
+    sword.trail.length = 0;
+  } else frozenPose = null;
+  const c = ctx.sword;
+  if (shown) Object.assign(sword, shown);
+  c.save();
+  if (combat.exhausted) c.globalAlpha = 0.55; // 탈진: 칼이 흐릿하게 (진탕과 다른 효과)
+  sword.render(c, view, t, debug);
+  c.restore();
+  if (shown) Object.assign(sword, live);
 }
 
 // For Honor식 가드 표시: 좌/위/우 세 호. 내 가드는 진하게, 들어오는 공격은 바깥 호가 차오르며 깜빡임
@@ -477,7 +584,7 @@ function updateHud(t) {
   $('guard-label').textContent = combat.guard ?? 'GUARD';
   dock.SLASH.classList.toggle('active', t - lastLaunch < 220);
   dock.THRUST.classList.toggle('active', !!sword.thrusting);
-  $('stun-vignette').classList.toggle('show', stunned && match.phase === 'fight');
+  $('stun-vignette').classList.toggle('show', stunned && match.phase === 'fight'); // 진탕 오버레이
 
   $('hp-you-fill').style.width = `${combat.hp}%`;
   $('hp-rival-fill').style.width = `${combat.oppHp}%`;
@@ -509,7 +616,8 @@ function updateHud(t) {
     else if (stunned) hint = 'Stunned!';
     else if (combat.incoming.some((a) => a.kind === 'thrust')) hint = 'Guard break incoming — push to counter';
     else if (combat.incoming.length) hint = 'Tilt your blade to the glowing side — or slash back to parry';
-    else if (match.phase === 'fight') hint = 'Tilt to guard  ·  swing → ← ↓ to attack  ·  push to break';
+    else if (combat.exhausted) hint = 'Out of stamina — hold your guard and breathe';
+    else if (match.phase === 'fight') hint = 'Tilt to guard  ·  swing → ← ↓ at mid speed  ·  push to break';
   }
   $('hint').textContent = hint;
   $('hint').classList.toggle('show', !!hint);
@@ -519,7 +627,8 @@ function updateHud(t) {
       `role ${net.role ?? '-'}  room ${net.code ?? '-'}  phase ${match.phase}  ping ${ping}`,
       `infer ${tracker.delegate}  grip ${gesture.state}  sword ${sword.active ? 'ON' : 'off'}  angle ${sword.angle.toFixed(0)}°`,
       `guard ${combat.guard ?? '-'}  stunned ${stunned}  cooldown ${Math.max(0, combat.cooldownUntil - t) | 0}ms`,
-      `speed ${sword.speed.toFixed(2)}  thrust approach ${sword.approach.toFixed(2)}`,
+      `speed ${sword.speed.toFixed(2)}  last peak ${combat.lastPeak.toFixed(2)} (ok ${VS_CONFIG.speedMin}–${VS_CONFIG.speedMax})  thrust ${sword.approach.toFixed(2)}`,
+      `stamina ${combat.stamina.toFixed(0)}${combat.exhausted ? ' EXHAUSTED' : ''}`,
       `incoming ${combat.incoming.map((a) => `${a.kind}:${a.side}${a.parried ? '(P)' : ''}`).join(' ') || '-'}`,
       `opp guard ${combat.opp.guard ?? '-'}  hp ${combat.hp} / ${combat.oppHp}`,
     ].join('\n');
@@ -532,17 +641,19 @@ let lastPose = 0;
 function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
   lastT = t;
-  combat.update(t);
+  combat.update(t, dt);
   handleEvents(t);
+  document.body.classList.toggle('concussed', combat.stunned(t) && match.phase === 'fight');
+  document.body.classList.toggle('exhausted', combat.exhausted && match.phase === 'fight');
   let simDt = dt;
   if (fx.hitstop > 0) { fx.hitstop -= dt * 1000; simDt = 0; }
   fx.update(simDt, dt);
   renderWorld(t, dt);
-  sword.render(ctx.sword, view, t, debug);
+  renderMySword(t);
   updateHud(t);
   if (net.connected && t - lastPose > 1000 / UI.poseHz) {
     lastPose = t;
-    net.send({ t: 'pose', guard: combat.guard, angle: sword.angle, active: sword.active, hp: combat.hp, stunned: combat.stunned(t) });
+    net.send({ t: 'pose', guard: combat.guard, angle: sword.angle, active: sword.active, hp: combat.hp, stunned: combat.stunned(t), exhausted: combat.exhausted });
   }
   requestAnimationFrame(loop);
 }
