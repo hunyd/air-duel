@@ -13,6 +13,7 @@ import { drawHand } from '../hand.js';
 // 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
 const SPEED_OK = '46,150,112';
 const FIZZLE = '128,124,126'; // 무효 공격 궤적
+const SLASH_OK = '30,96,232';  // 공격 판정된 궤적: 평소 쪽빛보다 밝고 선명하게
 const UI = {
   poseHz: 15,            // 상대에게 내 칼 자세를 보내는 빈도
   countdownMs: 3000,
@@ -332,7 +333,15 @@ function handleEvents(t) {
   for (const e of combat.events.splice(0)) {
     if (e.type === 'launch') {
       lastLaunch = t;
-      okFlashUntil = t + 250;
+      okFlashUntil = t + 350;
+      // 공격 판정된 휘두르기: 방금 궤적을 선명한 쪽빛으로 굵게 + 칼끝 불꽃 + 게이지 옆 문구
+      const seg = sword.trail.length ? sword.trail[sword.trail.length - 1].seg : null;
+      for (const p of sword.trail) if (p.seg === seg) { p.tint = SLASH_OK; p.boost = 1; }
+      if (sword.active) {
+        fx.sparks(sword.tip.x, sword.tip.y, 22, g.s * 1.6, null, Math.PI * 2, SLASH_OK);
+        fx.ring(sword.tip.x, sword.tip.y, 6, g.s * 0.16, 0.3, 4, SLASH_OK);
+      }
+      gaugeNote = { text: e.kind === 'thrust' ? 'THRUST!' : 'STRIKE!', color: SPEED_OK, at: t, until: t + 600 };
     } else if (e.type === 'fizzle') {
       // 무효 공격: 궤적을 회색으로, 게이지 옆에 TOO FAST / TOO SLOW
       for (const p of sword.trail) p.tint = FIZZLE;
@@ -376,9 +385,11 @@ function handleEvents(t) {
       if (e.outcome === 'hit') {
         oppFlash = 1;
         const ang = e.side === 'LEFT' ? 0 : e.side === 'RIGHT' ? Math.PI : Math.PI / 2;
-        fx.slash(p.x, p.y, ang, g.s * 0.5, PAL.player);
-        fx.sparks(p.x, p.y, 24, g.s * 1.8, null, Math.PI * 2, PAL.vital); fx.stop(70); fx.kick(6);
-        showBanner('HIT', 450, true);
+        fx.slash(p.x, p.y, ang, g.s * 0.8, PAL.player);
+        fx.sparks(p.x, p.y, 40, g.s * 2.4, null, Math.PI * 2, PAL.vital);
+        fx.ring(p.x, p.y, 10, g.s * 0.4, 0.4, 6, PAL.vital);
+        fx.flash = 0.35; fx.flashColor = PAL.vital; fx.stop(110); fx.kick(10);
+        showBanner(`HIT −${e.dmg ?? ''}`.replace(/ −$/, ''), 700);
       } else if (e.outcome === 'block') {
         fx.shield(p.x, p.y, g.s * 0.08, PAL.enemy, 0.3);
         fx.sparks(p.x, p.y, 12, g.s, null, Math.PI * 2, PAL.spark); showBanner('BLOCKED — STUNNED', 650, true);
@@ -468,7 +479,7 @@ function renderWorld(t, dt) {
 }
 
 // ---------- 휘두르기 속도 게이지 + 스태미나 (상대 발 아래, 시선 가까이) ----------
-const gaugeY = (g) => g.ey + 0.5 * g.s;
+const gaugeY = (g) => Math.min(g.ey + 0.8 * g.s, view.H - 48); // 길어진 하카마 밑단(0.735) 아래
 const gaugeW = (g) => Math.min(g.s * 0.62, view.W * 0.5);
 let needle = 0;        // 표시용 속도 (최고값을 잠깐 붙잡았다가 내려옴)
 let gaugeNote = null;  // { text, color, until, reason, at }
@@ -476,7 +487,7 @@ let okFlashUntil = 0;
 
 function drawGauge(c, g, t, dt) {
   const max = VS_CONFIG.speedGaugeMax;
-  const w = gaugeW(g), h = Math.max(8, g.s * 0.02);
+  const w = gaugeW(g), h = Math.max(12, g.s * 0.032);
   const x0 = g.ex - w / 2, y = gaugeY(g);
   const X = (v) => x0 + (Math.min(max, Math.max(0, v)) / max) * w;
   const live = sword.active && !combat.stunned(t) ? sword.speed : 0;
@@ -484,8 +495,11 @@ function drawGauge(c, g, t, dt) {
 
   c.save();
   // 바탕 + 무효 구간(빗금)
-  c.fillStyle = 'rgba(250,246,236,0.9)';
+  c.fillStyle = 'rgba(250,246,236,0.95)';
   c.fillRect(x0 - 3, y - 3, w + 6, h + 6);
+  c.strokeStyle = `rgba(${PAL.ink},0.7)`;
+  c.lineWidth = 1.5;
+  c.strokeRect(x0 - 3, y - 3, w + 6, h + 6);
   const xa = X(VS_CONFIG.speedMin), xb = X(VS_CONFIG.speedMax);
   c.fillStyle = `rgba(${PAL.ink},0.08)`;
   c.fillRect(x0, y, w, h);
@@ -497,7 +511,7 @@ function drawGauge(c, g, t, dt) {
   c.restore();
   // 유효 구간 (민트)
   const ok = t < okFlashUntil;
-  c.fillStyle = `rgba(${SPEED_OK},${ok ? 0.95 : 0.55})`;
+  c.fillStyle = `rgba(${SPEED_OK},${ok ? 1 : 0.75})`;
   c.fillRect(xa, y, xb - xa, h);
   // 바늘
   let nx = X(needle);
@@ -505,7 +519,8 @@ function drawGauge(c, g, t, dt) {
   if (note?.reason) nx += Math.sin(t / 18) * 3 * (1 - (t - note.at) / 500); // 무효: 벗어난 쪽에서 흔들림
   const bad = needle > VS_CONFIG.speedMax || (needle > 1.15 && needle < VS_CONFIG.speedMin);
   c.fillStyle = bad ? `rgb(${FIZZLE})` : `rgb(${PAL.ink})`;
-  c.fillRect(nx - 1.5, y - 5, 3, h + 10);
+  c.fillRect(nx - 2, y - 6, 4, h + 12);
+  c.beginPath(); c.moveTo(nx - 7, y - 13); c.lineTo(nx + 7, y - 13); c.lineTo(nx, y - 5); c.closePath(); c.fill(); // 바늘 머리
   // 스태미나 (가는 막대)
   const sy = y + h + 6, sh = Math.max(3, h * 0.4);
   const ratio = combat.stamina / VS_CONFIG.stamina.max;
@@ -551,20 +566,17 @@ function renderMySword(t) {
   if (shown) Object.assign(sword, live);
 }
 
-// For Honor식 가드 표시: 좌/위/우 세 호. 내 가드는 진하게, 들어오는 공격은 바깥 호가 차오르며 깜빡임
+// For Honor식 가드 표시: 내가 막는 방향 호 하나 + 들어오는 공격은 바깥 호가 차오르며 깜빡임
 function drawReticle(c, g, t) {
   const rc = reticle(g);
   const span = (70 * Math.PI) / 180;
   c.save();
   c.lineCap = 'round';
-  for (const side of ['LEFT', 'TOP', 'RIGHT']) {
-    const a = SIDE_ANG[side];
-    const mine = combat.guard === side;
-    // 내 가드 = 청백
-    c.shadowColor = `rgba(${PAL.player},0.9)`;
-    c.shadowBlur = mine ? glow(16) : 0;
-    c.strokeStyle = mine ? `rgb(${PAL.player})` : `rgba(${PAL.ink},0.2)`;
-    c.lineWidth = mine ? 8 : 3;
+  // 내 가드: 지금 막고 있는 방향 한 호만 (빈 세 방향 호는 공격 방향 표시로 헷갈려서 뺌)
+  if (combat.guard) {
+    const a = SIDE_ANG[combat.guard];
+    c.strokeStyle = `rgb(${PAL.player})`;
+    c.lineWidth = 8;
     c.beginPath(); c.arc(rc.x, rc.y, rc.r, a - span / 2, a + span / 2); c.stroke();
   }
   for (const inc of combat.incoming) {
