@@ -12,6 +12,7 @@ const CONFIG = {
   modelTimeoutMs: 45000,
   workerStallMs: 2000,
   mainSkeletonScale: 0.6, // 메인 화면 손 뼈대 크기 (1 = 실제 크기)
+  renderDpr: 1,          // 게임 캔버스 해상도 배율 상한 (레티나 2배로 그리면 그리기 비용이 약 3배)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -53,7 +54,7 @@ let modelTimer = 0;
 function layout() {
   view.W = window.innerWidth;
   view.H = window.innerHeight;
-  view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  view.dpr = Math.min(window.devicePixelRatio || 1, CONFIG.renderDpr);
   view.diag = Math.hypot(view.W, view.H);
   for (const c of Object.values(canvases)) {
     c.width = Math.round(view.W * view.dpr);
@@ -436,7 +437,7 @@ function updateHud(now) {
     const m = gesture.metrics;
     const g = game.enemy?.ghost;
     const lines = [
-      `FPS(infer) ${resultTimes.length}   infer ${inferMs.toFixed(1)}ms   ${delegate}`,
+      `FPS render ${renderFps}  infer ${resultTimes.length}   infer ${inferMs.toFixed(1)}ms   ${delegate}`,
       `state ${gesture.state}   raw ${gesture.raw}   cand ${gesture.cand ?? '-'} ${(gesture.candProgress * 100) | 0}%`,
       m ? `ext  I ${m.ext[0].toFixed(2)}  M ${m.ext[1].toFixed(2)}  R ${m.ext[2].toFixed(2)}  P ${m.ext[3].toFixed(2)}` : 'ext  -',
       m ? `thumb ${m.thumb.toFixed(2)}   fistIn<${GESTURE_CONFIG.fistIn} hold<${GESTURE_CONFIG.fistHold}` : '',
@@ -454,8 +455,13 @@ function updateHud(now) {
 
 // ---------- 메인 루프 ----------
 let lastT = performance.now();
+const frameTimes = [];
+let renderFps = 0;
 function loop(t) {
   const dt = Math.min(0.05, (t - lastT) / 1000);
+  frameTimes.push(t);
+  while (frameTimes.length && t - frameTimes[0] > 1000) frameTimes.shift();
+  renderFps = frameTimes.length;
   lastT = t;
   game.update(dt, t, sword, view);
   if (game.over && panelKind !== 'over') openPanel('over');
