@@ -60,8 +60,8 @@ function saveBest(best) {
 }
 
 // ---------- 이펙트 ----------
-// 색 인자를 생략하면 흰색 (versus/ 화면은 기존 모습 그대로)
-const WHITE = '255,255,255';
+// 색 인자를 생략하면 먹색 (한지 바탕 위)
+const WHITE = PAL.ink;
 const easeOut = (k) => 1 - Math.pow(1 - k, 3);
 
 export class FX {
@@ -109,9 +109,13 @@ export class FX {
     this.ring(tip.x, tip.y, 4, length * 0.32, 0.3, 4, color);
     this.ring(tip.x, tip.y, 2, length * 0.18, 0.42, 3, color);
   }
-  // 막기: 방패 모양 섬광
+  // 막기: 먹물이 튄 자국 (가시 모양은 만들 때 한 번만 정함)
   shield(x, y, r, color = WHITE, life = 0.42) {
-    this.shields.push({ x, y, r, color, life, max: life });
+    const n = 11, spikes = [];
+    for (let i = 0; i < n; i++) spikes.push({ a: (i / n) * Math.PI * 2 + rand(-0.2, 0.2), l: rand(0.55, 1.35), w: rand(0.1, 0.22) });
+    const drops = [];
+    for (let i = 0; i < 6; i++) drops.push({ a: rand(0, Math.PI * 2), d: rand(1.25, 1.9), r: rand(0.05, 0.11) });
+    this.shields.push({ x, y, r, color, life, max: life, spikes, drops });
   }
   stop(ms) { this.hitstop = Math.max(this.hitstop, ms); }
   kick(px) { this.shake = Math.max(this.shake, px); }
@@ -139,130 +143,96 @@ export class FX {
     if (this.shake < 0.3) this.shake = 0;
   }
 
+  // 베기: 붓으로 휙 그은 획 — 한쪽은 굵게 눌렀다가 끝으로 갈수록 가늘게, 옆에 갈라진 붓털 자국
   renderSlash(ctx, o) {
     const k = 1 - o.life / o.max;
-    const grow = easeOut(Math.min(1, k / 0.35));
-    const fade = 1 - Math.max(0, (k - 0.35) / 0.65);
-    const L = o.length * (0.4 + 0.6 * grow);
-    const bulge = o.length * 0.16 * o.bend;
-    const w = o.length * 0.07 * fade;
+    const grow = easeOut(Math.min(1, k / 0.3));
+    const fade = 1 - Math.max(0, (k - 0.3) / 0.7);
+    const L = o.length * (0.35 + 0.65 * grow);
+    const bulge = o.length * 0.14 * o.bend;
+    const w = o.length * 0.075;
     ctx.save();
     ctx.translate(o.x, o.y);
     ctx.rotate(o.angle);
-    // 바깥 호와 안쪽 호 사이를 채운 초승달 (양 끝이 뾰족)
-    const crescent = (thick) => {
-      ctx.beginPath();
-      ctx.moveTo(-L / 2, 0);
-      ctx.quadraticCurveTo(0, bulge * 2 + thick * o.bend, L / 2, 0);
-      ctx.quadraticCurveTo(0, bulge * 2 - thick * o.bend, -L / 2, 0);
-      ctx.closePath();
-    };
-    ctx.shadowColor = `rgba(${o.color},0.95)`;
-    ctx.shadowBlur = glow(18);
-    ctx.fillStyle = `rgba(${o.color},${0.75 * fade})`;
-    crescent(w);
+    ctx.globalAlpha *= fade;
+    ctx.fillStyle = `rgb(${o.color})`;
+    // 시작(-L/2)은 굵고 끝(L/2)은 뾰족한 획
+    ctx.beginPath();
+    ctx.moveTo(-L / 2, -w * 0.2);
+    ctx.quadraticCurveTo(-L * 0.15, bulge * 2 - w * o.bend, L / 2, 0);
+    ctx.quadraticCurveTo(-L * 0.1, bulge * 2 + w * 0.15 * o.bend, -L / 2, w * 0.6);
+    ctx.closePath();
     ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = `rgba(255,255,255,${0.95 * fade})`;
-    crescent(w * 0.35);
-    ctx.fill();
+    // 갈라진 붓털 자국 두 줄
+    ctx.strokeStyle = `rgb(${o.color})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const off of [1.35, 1.7]) {
+      ctx.moveTo(-L * 0.42, w * 0.1 * off);
+      ctx.quadraticCurveTo(-L * 0.05, bulge * 2 + w * off * 0.6 * o.bend, L * 0.3, w * 0.15);
+    }
+    ctx.stroke();
     ctx.restore();
   }
 
+  // 찌르기: 곧은 먹선 + 엔소(붓으로 한 번에 그린 원) — 원은 한쪽이 열려 있고 굵기가 변함
   renderBeam(ctx, o) {
     const k = 1 - o.life / o.max;
-    const reach = easeOut(Math.min(1, k / 0.4));
-    const fade = 1 - k;
+    const reach = easeOut(Math.min(1, k / 0.35));
+    const fade = 1 - Math.max(0, (k - 0.35) / 0.65);
     const L = o.length * reach;
     ctx.save();
     ctx.translate(o.x, o.y);
     ctx.rotate(o.angle);
-    ctx.lineCap = 'round';
-    // 창날처럼 칼끝에서 넓게 시작해 뾰족하게 뻗는 빛
-    const w = o.length * 0.13 * (0.45 + 0.55 * fade);
-    const lance = ctx.createLinearGradient(0, 0, L, 0);
-    lance.addColorStop(0, `rgba(255,255,255,${0.9 * fade})`);
-    lance.addColorStop(0.25, `rgba(${o.color},${0.85 * fade})`);
-    lance.addColorStop(1, `rgba(${o.color},0)`);
-    ctx.shadowColor = `rgba(${o.color},1)`;
-    ctx.shadowBlur = glow(24);
-    ctx.fillStyle = lance;
+    ctx.globalAlpha *= fade;
+    ctx.fillStyle = `rgb(${o.color})`;
+    const w = o.length * 0.05;
     ctx.beginPath();
-    ctx.moveTo(-w * 0.6, 0);
-    ctx.quadraticCurveTo(0, -w, L * 0.25, -w * 0.55);
-    ctx.lineTo(L, 0);
-    ctx.lineTo(L * 0.25, w * 0.55);
-    ctx.quadraticCurveTo(0, w, -w * 0.6, 0);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    // 하얀 심 + 양옆 속도선
-    ctx.strokeStyle = `rgba(255,255,255,${fade})`;
-    ctx.lineWidth = 3 * fade + 1;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(L * 0.85, 0); ctx.stroke();
-    ctx.strokeStyle = `rgba(${o.color},${0.8 * fade})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (const side of [-1, 1]) {
-      ctx.moveTo(L * 0.1, side * w * 1.25); ctx.lineTo(L * 0.7 * reach, side * w * 1.1);
-    }
-    ctx.stroke();
-    // 칼끝의 십자 반짝임
-    const r = o.length * 0.14 * (1 - k * 0.5);
-    ctx.fillStyle = `rgba(255,255,255,${fade})`;
-    ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const a = (i * Math.PI) / 2;
-      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-      ctx.lineTo(Math.cos(a + Math.PI / 4) * r * 0.18, Math.sin(a + Math.PI / 4) * r * 0.18);
-    }
+    ctx.moveTo(-w, -w * 0.5); ctx.lineTo(L, 0); ctx.lineTo(-w, w * 0.5);
     ctx.closePath();
     ctx.fill();
+    // 엔소: 굵기가 다른 호 세 개를 이어 그려 붓 원 느낌 (열린 부분은 찌른 방향 반대쪽)
+    const R = o.length * 0.22 * (0.7 + 0.3 * reach);
+    const sweep = Math.PI * 1.75 * reach;
+    ctx.strokeStyle = `rgb(${o.color})`;
+    ctx.lineCap = 'round';
+    const seg = sweep / 3;
+    [0.09, 0.06, 0.03].forEach((lw, i) => {
+      ctx.lineWidth = o.length * lw * 0.5;
+      ctx.beginPath();
+      ctx.arc(L * 0.15, 0, R, Math.PI * 0.6 + seg * i, Math.PI * 0.6 + seg * (i + 1));
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
+  // 막기·튕김: 먹물 튐 — 가운데 덩어리 + 가시 + 흩어진 방울
   renderShield(ctx, o) {
     const k = 1 - o.life / o.max;
-    const sc = 0.55 + 0.6 * easeOut(Math.min(1, k / 0.3));
-    const fade = k < 0.3 ? 1 : 1 - (k - 0.3) / 0.7;
+    const sc = 0.6 + 0.5 * easeOut(Math.min(1, k / 0.25));
+    const fade = k < 0.35 ? 1 : 1 - (k - 0.35) / 0.65;
     const r = o.r * sc;
-    // 위가 넓고 아래가 뾰족한 방패
-    const path = (q) => {
-      ctx.beginPath();
-      ctx.moveTo(0, -q * 1.0);
-      ctx.quadraticCurveTo(q * 0.45, -q * 0.78, q * 0.86, -q * 0.82);
-      ctx.quadraticCurveTo(q * 0.92, q * 0.2, 0, q * 1.08);
-      ctx.quadraticCurveTo(-q * 0.92, q * 0.2, -q * 0.86, -q * 0.82);
-      ctx.quadraticCurveTo(-q * 0.45, -q * 0.78, 0, -q * 1.0);
-      ctx.closePath();
-    };
     ctx.save();
     ctx.translate(o.x, o.y);
-    const g = ctx.createRadialGradient(0, -r * 0.2, 0, 0, 0, r * 1.1);
-    g.addColorStop(0, `rgba(255,255,255,${0.55 * fade})`);
-    g.addColorStop(0.5, `rgba(${o.color},${0.28 * fade})`);
-    g.addColorStop(1, `rgba(${o.color},${0.06 * fade})`);
-    ctx.fillStyle = g;
-    path(r);
-    ctx.fill();
-    ctx.shadowColor = `rgba(${o.color},1)`;
-    ctx.shadowBlur = glow(20);
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = `rgba(${o.color},${fade})`;
-    ctx.lineWidth = 5;
-    path(r);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = `rgba(255,255,255,${0.9 * fade})`;
-    ctx.lineWidth = 2;
-    path(r * 0.72);
-    ctx.stroke();
-    // 방패 문장: 가운데 세로·가로 띠
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = `rgba(255,255,255,${0.5 * fade})`;
+    ctx.globalAlpha *= fade;
+    ctx.fillStyle = `rgb(${o.color})`;
     ctx.beginPath();
-    ctx.moveTo(0, -r * 0.7); ctx.lineTo(0, r * 0.78);
-    ctx.moveTo(-r * 0.6, -r * 0.2); ctx.lineTo(r * 0.6, -r * 0.2);
-    ctx.stroke();
+    o.spikes.forEach((sp, i) => {
+      const a0 = sp.a - sp.w, a1 = sp.a + sp.w;
+      const p0 = { x: Math.cos(a0) * r * 0.45, y: Math.sin(a0) * r * 0.45 };
+      const tip = { x: Math.cos(sp.a) * r * sp.l, y: Math.sin(sp.a) * r * sp.l };
+      const p1 = { x: Math.cos(a1) * r * 0.45, y: Math.sin(a1) * r * 0.45 };
+      i ? ctx.lineTo(p0.x, p0.y) : ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.lineTo(p1.x, p1.y);
+    });
+    ctx.closePath();
+    ctx.fill();
+    for (const d of o.drops) {
+      ctx.beginPath();
+      ctx.arc(Math.cos(d.a) * r * d.d, Math.sin(d.a) * r * d.d, r * d.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -272,12 +242,10 @@ export class FX {
     for (const o of this.shields) this.renderShield(ctx, o);
     for (const o of this.slashes) this.renderSlash(ctx, o);
     for (const o of this.beams) this.renderBeam(ctx, o);
-    ctx.shadowBlur = glow(8);
     for (const p of this.parts) {
       const k = p.life / p.max;
-      ctx.shadowColor = `rgba(${p.color},0.9)`;
       ctx.strokeStyle = `rgba(${p.color},${k})`;
-      ctx.lineWidth = p.w;
+      ctx.lineWidth = p.w * 1.4;
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035);
@@ -285,7 +253,6 @@ export class FX {
     }
     for (const r of this.rings) {
       const k = 1 - r.life / r.max;
-      ctx.shadowColor = `rgba(${r.color},0.9)`;
       ctx.strokeStyle = `rgba(${r.color},${1 - k})`;
       ctx.lineWidth = r.width * (1 - k) + 0.5;
       ctx.beginPath();
@@ -294,7 +261,6 @@ export class FX {
     }
     for (const c of this.cracks) {
       const k = c.life / c.max;
-      ctx.shadowColor = `rgba(${c.color},0.9)`;
       ctx.strokeStyle = `rgba(${c.color},${0.9 * k})`;
       ctx.lineWidth = 2.2;
       for (const pts of c.lines) {
@@ -305,7 +271,7 @@ export class FX {
     }
     ctx.restore();
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(${this.flashColor},${this.flash * 0.35})`;
+      ctx.fillStyle = `rgba(${this.flashColor},${this.flash * 0.22})`;
       ctx.fillRect(-50, -50, view.W + 100, view.H + 100);
     }
   }
@@ -331,309 +297,148 @@ function drawObject(ctx, o) {
   ctx.save();
   ctx.translate(o.x, o.y);
   ctx.rotate(o.rot);
-  ctx.shadowColor = 'rgba(255,255,255,0.7)';
-  ctx.shadowBlur = glow(14);
   shapePath(ctx, o.bomb ? 'circle' : o.shape, o.r);
-  ctx.fillStyle = o.bomb ? 'rgba(15,16,20,0.62)' : 'rgba(255,255,255,0.2)';
+  ctx.fillStyle = o.bomb ? `rgb(${PAL.ink})` : `rgba(${PAL.ink},0.12)`;
   ctx.fill();
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = `rgb(${PAL.ink})`;
   ctx.stroke();
-  ctx.shadowBlur = 0;
   if (o.bomb) {
     const k = o.r * 0.38;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = `rgb(${PAL.enemy})`;
     ctx.beginPath();
     ctx.moveTo(-k, -k); ctx.lineTo(k, k);
     ctx.moveTo(k, -k); ctx.lineTo(-k, k);
     ctx.stroke();
-  } else {
-    // 유리 하이라이트
-    ctx.rotate(-o.rot);
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.beginPath();
-    ctx.ellipse(-o.r * 0.32, -o.r * 0.38, o.r * 0.32, o.r * 0.14, -0.6, 0, Math.PI * 2);
-    ctx.fill();
   }
   ctx.restore();
 }
 
 // ---------- 사무라이 ----------
-// 2D 일러스트풍: 먹선 외곽 + 셀 음영(빛은 왼쪽 위). 각 색은 [밝은 면, 기본, 그림자]
-const INK = '#0c0b10';
+// 수묵화풍 실루엣: 먹색 면 두 톤(빛 받는 쪽 / 그늘) + 주홍 포인트. 그라데이션·발광 없이 평평한 면만 쓴다.
 const SAM = {
-  lacquer: ['#e0544c', '#a0222a', '#5e0f18'], // 옻칠 갑옷
-  cloth: ['#56658f', '#2e3858', '#1a2039'],   // 하카마·소매
-  straw: ['#f2da9f', '#c9a463', '#85663a'],   // 삿갓
-  iron: ['#767b8b', '#3d404b', '#1f2129'],    // 토시·가면·코등이
-  sash: ['#ff7262', '#c52d35', '#7a1420'],    // 허리끈 자락
-  lace: '#eab24c',                             // 갑옷 끈
-  collar: '#ece4d2',
-  face: '#2c1d1d',
+  ink: [24, 21, 23],       // 그늘 면
+  inkLit: [52, 46, 49],    // 빛 받는 면
+  red: [200, 52, 38],      // 주홍 포인트 (끈, 띠, 칼끈)
 };
-
-// '#rrggbb'를 흰색 쪽으로 k(0~1)만큼 섞기 — 피격 섬광용
-function tint(hex, k) {
-  if (!k) return hex;
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (v) => Math.round(v + (255 - v) * k);
-  return `rgb(${ch(n >> 16)},${ch((n >> 8) & 255)},${ch(n & 255)})`;
-}
+// [r,g,b]를 to 쪽으로 k만큼 섞어 css 색으로 — 피격 섬광(주홍으로 물듦)
+const mix = (c, to, k) => `rgb(${c.map((v, i) => Math.round(v + (to[i] - v) * k)).join(',')})`;
 
 // 상대 검객: geo = { s, ex, ey }, blade = { a: 칼자루, b: 칼끝 } (화면 좌표)
 // opts: alpha, tilt(발 기준 회전), flash(피격 0~1)
+// 비율: 삿갓 꼭대기 -0.585 ~ 발 0.45 (키 대비 작은 머리, 넓은 삿갓, 길게 떨어지는 옷자락)
 export function drawFigure(ctx, geo, blade, { alpha = 1, tilt = 0, flash = 0 } = {}) {
   const { s, ex, ey } = geo;
   const P = (x, y) => ({ x: ex + x * s, y: ey + y * s });
   const t = performance.now() / 1000;
-  const fk = Math.min(1, flash) * 0.75;
-  const tone = (c) => (Array.isArray(c) ? c.map((h) => tint(h, fk)) : tint(c, fk));
-  const lacq = tone(SAM.lacquer), cloth = tone(SAM.cloth), straw = tone(SAM.straw);
-  const iron = tone(SAM.iron), sash = tone(SAM.sash), lace = tone(SAM.lace);
-
-  // 셀 음영: 왼쪽 → 오른쪽으로 밝은 면 / 기본 / 그림자가 딱 끊기는 그라데이션
-  const cel = (x0, x1, [hl, base, sh], a = 0.3, b = 0.68) => {
-    const p0 = P(x0, 0), p1 = P(x1, 0);
-    const g = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
-    g.addColorStop(0, hl); g.addColorStop(a, hl);
-    g.addColorStop(a + 0.001, base); g.addColorStop(b, base);
-    g.addColorStop(b + 0.001, sh); g.addColorStop(1, sh);
-    return g;
-  };
-  const path = (pts) => {
+  const fk = Math.min(1, flash) * 0.8;
+  const ink = mix(SAM.ink, SAM.red, fk), lit = mix(SAM.inkLit, SAM.red, fk);
+  const red = `rgb(${SAM.red.join(',')})`;
+  const poly = (pts, fill) => {
     ctx.beginPath();
-    pts.forEach((q, i) => {
-      const p = q.x !== undefined ? q : P(q[0], q[1]);
-      i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y);
-    });
+    pts.forEach((q, i) => { const p = q.x !== undefined ? q : P(q[0], q[1]); i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
     ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
   };
-  const shape = (pts, fill) => { path(pts); ctx.fillStyle = fill; ctx.fill(); ctx.stroke(); };
-  const lines = (segs, color, w) => {
-    ctx.save();
-    ctx.strokeStyle = color; ctx.lineWidth = w;
-    ctx.beginPath();
-    for (const [a, b] of segs) { const p = P(...a), q = P(...b); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
-    ctx.stroke();
-    ctx.restore();
-  };
-  // 먹선 외곽이 있는 굵은 팔다리
-  const limb = (pts, w, color) => {
-    ctx.save();
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (const [c, lw] of [[INK, w + ink * 2], [color, w]]) {
-      ctx.strokeStyle = c; ctx.lineWidth = lw;
-      ctx.beginPath();
-      pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
-      ctx.stroke();
+  // 끝이 가늘어지는 띠 (바람에 날리는 천)
+  const ribbon = (x0, y0, len, w, dir, ph, fill) => {
+    const top = [], bot = [];
+    for (let i = 0; i <= 8; i++) {
+      const u = i / 8;
+      const x = x0 + dir * u * len;
+      const y = y0 + u * len * 0.18 + Math.sin(t * 4 - u * 4 + ph) * 0.025 * u;
+      const ww = w * (1 - u * 0.85);
+      top.push([x, y - ww]); bot.unshift([x, y + ww]);
     }
-    ctx.restore();
+    poly([...top, ...bot], fill);
   };
 
   ctx.save();
   ctx.globalAlpha = alpha;
+
+  // 땅선: 발밑에서 양옆으로 가늘어지는 붓 획 (기울어도 땅은 그대로)
+  poly([[-0.62, 0.452], [-0.1, 0.44], [0.12, 0.438], [0.64, 0.455], [0.12, 0.462], [-0.1, 0.466]], `rgba(${SAM.ink.join(',')},0.85)`);
+
   if (tilt) {
     const foot = P(0, 0.45);
     ctx.translate(foot.x, foot.y);
     ctx.rotate(tilt);
     ctx.translate(-foot.x, -foot.y);
   }
-  const ink = Math.max(1.5, s * 0.0065);
-  ctx.lineJoin = 'round';
+
+  // 등 뒤로 날리는 주홍 끈 두 가닥 + 먹색 천
+  ribbon(-0.03, -0.36, 0.34, 0.018, -1, 0, ink);
+  ribbon(-0.02, -0.03, 0.26, 0.014, -1, 1.3, red);
+  ribbon(0.02, -0.02, 0.2, 0.011, -1, 2.4, red);
+
+  // 허리에 찬 칼집: 뒤로 비스듬히
+  poly([[-0.03, -0.02], [-0.02, 0.0], [-0.44, 0.2], [-0.455, 0.185]], ink);
+  poly([[-0.1, 0.017], [-0.09, 0.032], [-0.12, 0.046], [-0.13, 0.031]], red);
+
+  // 발
+  poly([[-0.1, 0.415], [-0.045, 0.415], [-0.04, 0.45], [-0.12, 0.45]], ink);
+  poly([[0.05, 0.415], [0.105, 0.415], [0.125, 0.45], [0.045, 0.45]], ink);
+
+  // 몸: 각진 어깨(카타기누) → 허리 → 넓게 퍼지는 하카마. 밑단은 바람에 살짝 날림
+  const hem = (x) => 0.415 + Math.sin(t * 2.6 + x * 14) * 0.008;
+  const body = [
+    [-0.035, -0.375], [0.035, -0.375],
+    [0.175, -0.345], [0.15, -0.3], [0.1, -0.29],
+    [0.098, -0.02], [0.165, 0.33], [0.18, hem(0.18)], [0.05, hem(0.05)], [0.012, 0.24],
+    [-0.012, 0.24], [-0.05, hem(-0.05)], [-0.18, hem(-0.18)], [-0.2, 0.36], [-0.098, -0.02],
+    [-0.1, -0.29], [-0.15, -0.3], [-0.175, -0.345],
+  ];
+  poly(body, ink);
+  // 빛 받는 면: 왼쪽 몸판과 왼쪽 하카마
+  poly([[-0.035, -0.375], [-0.175, -0.345], [-0.15, -0.3], [-0.1, -0.29], [-0.098, -0.02], [-0.2, 0.36], [-0.18, hem(-0.18)], [-0.11, hem(-0.11)], [-0.04, -0.02], [-0.02, -0.3]], lit);
+  // 허리띠 (주홍)
+  poly([[-0.1, -0.035], [0.1, -0.035], [0.1, -0.008], [-0.1, -0.008]], red);
+  // 깃: V자 (그늘 쪽 먹으로 그어 형태를 읽히게)
+  poly([[-0.035, -0.375], [0.035, -0.375], [0.004, -0.29]], `rgb(${SAM.inkLit.map((v) => v + 30).join(',')})`);
+
+  // 얼굴: 삿갓 그늘 속, 주홍 눈빛 한 줄
+  poly([[-0.03, -0.44], [0.03, -0.44], [0.026, -0.385], [-0.026, -0.385]], ink);
+  poly([[-0.022, -0.418], [0.022, -0.418], [0.02, -0.412], [-0.02, -0.412]], red);
+
+  // 삿갓: 넓고 납작한 원뿔 — 왼쪽 면 밝게
+  poly([[0, -0.585], [0.225, -0.458], [0.2, -0.45], [0, -0.462], [-0.2, -0.45], [-0.225, -0.458]], ink);
+  poly([[0, -0.585], [-0.225, -0.458], [-0.2, -0.45], [0, -0.462]], lit);
+
+  // 팔: 넓은 소매(먹) → 칼자루를 쥔 손
+  const shL = P(-0.13, -0.32), shR = P(0.13, -0.32);
   ctx.lineCap = 'round';
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = ink;
-
-  // 등 뒤의 붉은 기운 — 어두운 배경에서 실루엣을 떼어냄
-  const c0 = P(0, -0.08);
-  const aura = ctx.createRadialGradient(c0.x, c0.y, s * 0.05, c0.x, c0.y, s * 0.62);
-  aura.addColorStop(0, `rgba(${PAL.enemy},${0.2 + flash * 0.25})`);
-  aura.addColorStop(1, `rgba(${PAL.enemy},0)`);
-  ctx.fillStyle = aura;
-  ctx.beginPath(); ctx.arc(c0.x, c0.y, s * 0.62, 0, Math.PI * 2); ctx.fill();
-
-  // 바닥 그림자
-  const gs = P(0, 0.45);
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.beginPath(); ctx.ellipse(gs.x, gs.y, s * 0.27, s * 0.035, 0, 0, Math.PI * 2); ctx.fill();
-
-  // 허리끈 자락: 등 뒤에서 바람에 날림
-  for (const [ph, len, dy] of [[0, 0.26, 0], [1.7, 0.2, 0.035]]) {
-    const top = [], bot = [];
-    const N = 10;
-    for (let i = 0; i <= N; i++) {
-      const u = i / N;
-      const x = 0.08 + u * len;
-      const y = 0.03 + dy + u * 0.1 + Math.sin(t * 4.2 - u * 5 + ph) * 0.03 * u;
-      const w = 0.02 * (1 - u * 0.55);
-      top.push([x, y - w]); bot.unshift([x, y + w]);
-    }
-    shape([...top, ...bot], cel(0.08, 0.08 + len, sash, 0.2, 0.6));
+  ctx.lineJoin = 'round';
+  for (const [sh, col] of [[shR, ink], [shL, lit]]) {
+    const el = lerpPt(sh, blade.a, 0.45);
+    el.y += s * 0.05;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = s * 0.075;
+    ctx.beginPath(); ctx.moveTo(sh.x, sh.y); ctx.lineTo(el.x, el.y); ctx.stroke();
+    ctx.lineWidth = s * 0.04;
+    ctx.beginPath(); ctx.moveTo(el.x, el.y); ctx.lineTo(blade.a.x, blade.a.y); ctx.stroke();
   }
 
-  // 발 (하카마 아래로 살짝)
-  ctx.fillStyle = iron[2];
-  for (const x of [-0.13, 0.13]) {
-    const f = P(x, 0.44);
-    ctx.beginPath(); ctx.ellipse(f.x, f.y, s * 0.04, s * 0.018, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-
-  // 하카마: 넓게 퍼진 바지, 밑단이 살랑거림
-  const hem = (x) => 0.42 + Math.sin(t * 3 + x * 18) * 0.006;
-  shape([
-    [-0.11, 0.02], [0.11, 0.02], [0.235, hem(0.235)], [0.035, hem(0.035)], [0, 0.27],
-    [-0.035, hem(-0.035)], [-0.235, hem(-0.235)],
-  ], cel(-0.235, 0.235, cloth, 0.3, 0.62));
-  // 주름
-  lines([
-    [[-0.07, 0.04], [-0.165, 0.41]], [[-0.03, 0.04], [-0.09, 0.41]],
-    [[0.03, 0.04], [0.09, 0.41]], [[0.07, 0.04], [0.165, 0.41]],
-  ], cloth[2], ink * 0.8);
-
-  // 쿠사즈리: 허리에서 늘어진 미늘 판 3장
-  for (const j of [-1, 0, 1]) {
-    const cx = j * 0.083, top = 0.02, bot = j ? 0.165 : 0.175;
-    const wt = 0.041, wb = 0.047;
-    const col = j < 0 ? lacq[0] : j === 0 ? lacq[1] : lacq[2];
-    shape([[cx - wt, top], [cx + wt, top], [cx + wb + j * 0.008, bot], [cx - wb + j * 0.008, bot]], col);
-    const bands = [];
-    for (const f of [0.33, 0.62]) { const y = top + (bot - top) * f; bands.push([[cx - wt - 0.003, y], [cx + wb, y]]); }
-    lines(bands, INK, ink * 0.7);
-    lines([[[cx - 0.015, top], [cx - 0.015 + j * 0.003, bot]], [[cx + 0.015, top], [cx + 0.015 + j * 0.003, bot]]], lace, ink * 0.6);
-  }
-
-  // 깃: 갑옷 위로 보이는 흰 속옷 깃
-  shape([[-0.055, -0.318], [0.055, -0.318], [0.028, -0.25], [-0.028, -0.25]], tone(SAM.collar));
-  shape([[-0.022, -0.318], [0.022, -0.318], [0, -0.262]], cloth[1]);
-
-  // 도: 가슴 갑옷 (가운데 V홈, 허리로 좁아짐) + 미늘 띠와 금색 끈
-  ctx.beginPath();
-  const dTL = P(-0.13, -0.285), dTR = P(0.13, -0.285), dBR = P(0.1, 0.005), dBL = P(-0.1, 0.005);
-  ctx.moveTo(dTL.x, dTL.y);
-  for (const q of [[-0.036, -0.285], [0, -0.252], [0.036, -0.285]]) { const p = P(...q); ctx.lineTo(p.x, p.y); }
-  ctx.lineTo(dTR.x, dTR.y);
-  const cR = P(0.138, -0.14), cL = P(-0.138, -0.14);
-  ctx.quadraticCurveTo(cR.x, cR.y, dBR.x, dBR.y);
-  ctx.lineTo(dBL.x, dBL.y);
-  ctx.quadraticCurveTo(cL.x, cL.y, dTL.x, dTL.y);
-  ctx.closePath();
-  ctx.fillStyle = cel(-0.13, 0.13, lacq, 0.3, 0.66);
-  ctx.fill(); ctx.stroke();
-  // 윗판(무나이타)
-  shape([[-0.13, -0.285], [-0.036, -0.285], [0, -0.252], [0.036, -0.285], [0.13, -0.285], [0.132, -0.25], [-0.132, -0.25]],
-    cel(-0.13, 0.13, iron, 0.3, 0.66));
-  const bandY = [-0.2, -0.145, -0.09, -0.04];
-  lines(bandY.map((y) => { const w = 0.132 - (y + 0.25) * 0.11; return [[-w, y], [w, y]]; }), INK, ink * 0.7);
-  const laces = [];
-  for (const x of [-0.085, -0.045, 0, 0.045, 0.085]) laces.push([[x, -0.25], [x * 0.82, 0]]);
-  lines(laces, lace, ink * 0.55);
-  // 옻칠 광택
-  ctx.save();
-  ctx.globalAlpha *= 0.35;
-  shape([[-0.105, -0.235], [-0.08, -0.235], [-0.07, -0.03], [-0.085, -0.03]], '#ffffff');
-  ctx.restore();
-
-  // 오비
-  shape([[-0.104, -0.005], [0.104, -0.005], [0.108, 0.03], [-0.108, 0.03]], cel(-0.108, 0.108, cloth, 0.3, 0.66));
-  lines([[[-0.104, 0.012], [0.106, 0.012]]], sash[1], ink * 1.1);
-
-  // 얼굴: 삿갓 그늘 속 어두운 얼굴 + 철가면 + 붉게 빛나는 눈
-  shape([[-0.042, -0.41], [0.042, -0.41], [0.046, -0.36], [0.03, -0.322], [-0.03, -0.322], [-0.046, -0.36]], tone(SAM.face));
-  shape([[-0.045, -0.365], [0.045, -0.365], [0.03, -0.322], [-0.03, -0.322]], cel(-0.045, 0.045, iron, 0.3, 0.65));
-  lines([[[-0.018, -0.345], [0.018, -0.345]], [[-0.012, -0.333], [0.012, -0.333]]], INK, ink * 0.6);
-  ctx.save();
-  ctx.shadowColor = `rgba(${PAL.enemy},1)`;
-  ctx.shadowBlur = glow(s * 0.03);
-  ctx.fillStyle = `rgb(${PAL.enemyCore})`;
-  for (const x of [-0.019, 0.019]) {
-    const e = P(x, -0.385);
-    ctx.beginPath(); ctx.ellipse(e.x, e.y, s * 0.011, s * 0.004, x < 0 ? 0.25 : -0.25, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.restore();
-
-  // 삿갓: 왼쪽 면은 밝게, 오른쪽 면은 그늘 + 짚 결
-  const apex = [0, -0.545], bL = [-0.185, -0.4], bR = [0.185, -0.4], bC = [0, -0.388];
-  shape([apex, bR, [0.09, -0.392], bC, [-0.09, -0.392], bL], straw[1]);
-  shape([apex, bL, [-0.09, -0.392], bC], straw[0]);
-  shape([apex, bR, [0.09, -0.392], bC], straw[2]);
-  const weave = [];
-  for (const u of [-0.75, -0.5, -0.25, 0.25, 0.5, 0.75]) weave.push([[0, -0.535], [0.185 * u, -0.397 + Math.abs(u) * -0.003]]);
-  lines(weave, straw[2], ink * 0.5);
-  lines([[[-0.16, -0.408], [0.16, -0.408]]], straw[2], ink * 0.5);
-  // 꼭지
-  const ap = P(...apex);
-  ctx.fillStyle = straw[2];
-  ctx.beginPath(); ctx.arc(ap.x, ap.y, s * 0.009, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-
-  // 팔 → 칼자루: 넓은 소매(위팔) + 철 토시(아래팔)
-  const shL = P(-0.125, -0.255), shR = P(0.125, -0.255);
-  for (const sh of [shR, shL]) {
-    const el = lerpPt(sh, blade.a, 0.5);
-    el.y += s * 0.04;
-    limb([el, blade.a], s * 0.042, iron[1]);
-    limb([sh, el], s * 0.07, cloth[sh === shL ? 0 : 1]);
-  }
-
-  // 소데: 어깨 판
-  for (const side of [-1, 1]) {
-    const o = (x) => x * side;
-    const pts = [[o(0.085), -0.295], [o(0.18), -0.275], [o(0.198), -0.155], [o(0.112), -0.168]];
-    shape(pts, side < 0 ? lacq[0] : lacq[2]);
-    lines([0.33, 0.62].map((f) => [[o(0.085 + 0.027 * f), -0.295 + 0.127 * f], [o(0.18 + 0.018 * f), -0.275 + 0.12 * f]]), INK, ink * 0.7);
-    lines([[[o(0.12), -0.287], [o(0.14), -0.163]], [[o(0.155), -0.281], [o(0.172), -0.158]]], lace, ink * 0.55);
-  }
-
-  // 칼: 붉은 날 + 코등이 + 손잡이
+  // 칼: 먹색 칼등 + 주홍 날 선, 주홍 칼끈, 먹색 코등이
   const d = norm({ x: blade.b.x - blade.a.x, y: blade.b.y - blade.a.y });
   const nv = { x: -d.y, y: d.x };
   const at = (k, w = 0) => ({ x: blade.a.x + d.x * k * s + nv.x * w * s, y: blade.a.y + d.y * k * s + nv.y * w * s });
-  shape([at(-0.075, 0.012), at(0.03, 0.012), at(0.03, -0.012), at(-0.075, -0.012)], sash[2]);
-  ctx.save();
-  ctx.strokeStyle = lace; ctx.lineWidth = ink * 0.6;
-  ctx.beginPath();
-  for (let k = -0.07; k < 0.025; k += 0.024) {
-    const p = at(k, 0.011), q = at(k + 0.024, -0.011), r = at(k, -0.011), u = at(k + 0.024, 0.011);
-    ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.moveTo(r.x, r.y); ctx.lineTo(u.x, u.y);
-  }
-  ctx.stroke();
-  ctx.restore();
-  const tip = blade.b;
-  const bl = Math.hypot(tip.x - blade.a.x, tip.y - blade.a.y) / s;
-  const bladeGrad = ctx.createLinearGradient(blade.a.x, blade.a.y, tip.x, tip.y);
-  bladeGrad.addColorStop(0, `rgb(${PAL.enemyCore})`);
-  bladeGrad.addColorStop(1, `rgb(${PAL.enemy})`);
-  ctx.save();
-  ctx.shadowColor = `rgba(${PAL.enemy},0.95)`;
-  ctx.shadowBlur = glow(s * 0.035 + flash * 20);
-  path([at(0.04, 0.013), at(bl - 0.06, 0.011), tip, at(bl - 0.025, -0.011), at(0.04, -0.013)]);
-  ctx.fillStyle = bladeGrad;
-  ctx.fill();
-  ctx.restore();
-  path([at(0.04, 0.013), at(bl - 0.06, 0.011), tip, at(bl - 0.025, -0.011), at(0.04, -0.013)]);
-  ctx.stroke();
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(1, ink * 0.5);
-  ctx.beginPath(); { const p = at(0.045, -0.004), q = at(bl - 0.03, -0.004); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }
-  ctx.stroke();
-  ctx.restore();
-  // 코등이
+  const bl = Math.hypot(blade.b.x - blade.a.x, blade.b.y - blade.a.y) / s;
+  poly([at(-0.075, 0.011), at(0.03, 0.011), at(0.03, -0.011), at(-0.075, -0.011)], red);
+  poly([at(0.04, 0.011), at(bl * 0.55, 0.012), at(bl - 0.04, 0.006), blade.b, at(bl - 0.03, -0.009), at(0.04, -0.009)], ink);
+  poly([at(0.05, 0.011), at(bl * 0.55, 0.012), at(bl - 0.04, 0.006), blade.b, at(bl - 0.04, 0.002), at(0.05, 0.005)], red);
   const tb = at(0.035);
   ctx.save();
   ctx.translate(tb.x, tb.y);
   ctx.rotate(Math.atan2(d.y, d.x));
-  ctx.fillStyle = iron[1];
-  ctx.strokeStyle = lace;
-  ctx.lineWidth = ink * 0.9;
-  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.011, s * 0.038, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.beginPath(); ctx.ellipse(0, 0, s * 0.01, s * 0.034, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
+  // 손
+  ctx.fillStyle = lit;
+  for (const k of [-0.045, 0.005]) { const h = at(k); ctx.beginPath(); ctx.arc(h.x, h.y, s * 0.022, 0, Math.PI * 2); ctx.fill(); }
 
-  // 손 (칼자루를 쥔 주먹)
-  for (const k of [-0.045, 0.005]) {
-    const h = at(k);
-    ctx.fillStyle = iron[0];
-    ctx.beginPath(); ctx.arc(h.x, h.y, s * 0.024, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
   ctx.restore();
 }
 
@@ -1207,7 +1012,7 @@ export class Game {
       // 과녁
       ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(vc.x, vc.y, r * 0.55, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = `rgb(${PAL.vital})`;
       ctx.beginPath(); ctx.arc(vc.x, vc.y, r * 0.16, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = `rgb(${PAL.vital})`;
       // 4방향 안쪽 화살촉
@@ -1286,7 +1091,7 @@ export class Game {
       ctx.shadowBlur = glow(10 + near * 18);
       ctx.setLineDash([12, 10]);
       ctx.lineDashOffset = -this.clock / 20;
-      ctx.strokeStyle = `rgba(${PAL.enemy},${0.35 + 0.35 * p + urgent * 0.25})`;
+      ctx.strokeStyle = near >= 1 ? `rgba(${PAL.player},0.85)` : `rgba(${PAL.enemy},${0.35 + 0.35 * p + urgent * 0.25})`;
       ctx.lineWidth = 10 + near * 6;
       ctx.beginPath(); ctx.moveTo(g.a.x, g.a.y); ctx.lineTo(g.b.x, g.b.y); ctx.stroke();
       ctx.setLineDash([]);

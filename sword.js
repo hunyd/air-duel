@@ -307,7 +307,7 @@ export class Sword {
       const fade = 1 - (now - c.ts) / C.trailMs;
       if (k * fade <= 0.02) continue;
       const m0 = lerpPt(a.b, b.b, 0.5), m1 = lerpPt(b.b, c.b, 0.5);
-      ctx.strokeStyle = `rgba(${c.tint || PAL.playerCore},${k * fade})`;
+      ctx.strokeStyle = `rgba(${c.tint || PAL.player},${k * fade})`;
       ctx.lineWidth = 1 + 3 * fade;
       ctx.beginPath();
       ctx.moveTo(m0.x, m0.y);
@@ -326,14 +326,28 @@ export class Sword {
       ctx.shadowColor = `rgba(${PAL.player},0.95)`;
       ctx.shadowBlur = glow(this.slashing ? 28 : this.guarding ? 20 : 14);
 
-      // 손잡이: 짧고 어둡게(남색) + 감은 끈 무늬 → 청백 칼날과 확실히 구분
+      // ---- 카타나: 쪽빛 칼몸 + 날 안쪽의 밝은 번뜩임 + 둥근 코등이 + 끈 감은 손잡이 ----
+      // 원근(persp): +면 칼끝이 플레이어 쪽으로 튀어나옴(굵게), -면 화면 안쪽으로 들어감(가늘고 흐리게)
+      const raw = this.depth || 0;
+      // MediaPipe z는 카메라에 가까울수록 음수. 기본(-raw)은 '카메라 쪽 = 튀어나옴', 반전 시 '카메라 쪽 = 화면 안쪽'
+      const persp = Math.max(-1, Math.min(1, (C.depthInvert ? raw : -raw) * C.depthGain));
+      const faceW = 0.45 + 0.65 * (this.face ?? 1);
+      const tipScale = Math.max(0.3, Math.min(2.2, 1 + persp * 1.2));
+      const wb = w * 0.62 * faceW;                 // 날 시작 쪽 폭
+      const wt = w * 0.34 * faceW * tipScale;      // 칼끝 쪽 폭
+      const tipA = Math.max(0.25, Math.min(1, 0.95 + persp * 0.6)); // 안쪽으로 갈수록 칼끝이 옅어짐
+      const L = dist(base, tip);
+      // 휘어짐: 칼등 쪽(n 반대)으로 살짝 굽은 곡선. 칼날(edge)은 +n 쪽
+      const bow = L * 0.05;
+      const ctrl = { x: (base.x + tip.x) / 2 - n.x * bow, y: (base.y + tip.y) / 2 - n.y * bow };
+      const near = lerpPt(base, tip, 0.9);
+      const nearC = { x: near.x - n.x * bow * 0.35, y: near.y - n.y * bow * 0.35 };
+      const side = (q, k) => ({ x: q.x + n.x * k, y: q.y + n.y * k });
+
+      // 손잡이 (짙은 쪽빛 + 마름모 끈 무늬) — 손에 가려 양끝만 보임
       const pom = { x: hilt.x - d.x * this.palmPx * C.pommel, y: hilt.y - d.y * this.palmPx * C.pommel };
-      const hw = w * 0.85;
-      ctx.save();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = 'rgba(20,30,58,0.92)';
-      ctx.strokeStyle = `rgba(${PAL.playerCore},0.85)`;
-      ctx.lineWidth = 1.5;
+      const hw = w * 0.8;
+      ctx.fillStyle = 'rgb(20,30,62)';
       ctx.beginPath();
       ctx.moveTo(pom.x + n.x * hw, pom.y + n.y * hw);
       ctx.lineTo(base.x + n.x * hw, base.y + n.y * hw);
@@ -341,11 +355,9 @@ export class Sword {
       ctx.lineTo(pom.x - n.x * hw, pom.y - n.y * hw);
       ctx.closePath();
       ctx.fill();
-      ctx.stroke();
-      // 끈 무늬 (X자)
       const gl = dist(pom, base);
       const wraps = Math.max(2, Math.round(gl / (hw * 2.2)));
-      ctx.strokeStyle = `rgba(${PAL.player},0.75)`;
+      ctx.strokeStyle = 'rgba(160,190,240,0.75)';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       for (let i = 0; i < wraps; i++) {
@@ -354,68 +366,50 @@ export class Sword {
         ctx.moveTo(p0.x - n.x * hw, p0.y - n.y * hw); ctx.lineTo(p1.x + n.x * hw, p1.y + n.y * hw);
       }
       ctx.stroke();
-      // 손잡이 끝 마개
-      ctx.fillStyle = `rgb(${PAL.playerCore})`;
-      ctx.beginPath(); ctx.arc(pom.x, pom.y, hw * 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgb(${PAL.ink})`;
+      ctx.beginPath(); ctx.arc(pom.x, pom.y, hw * 0.85, 0, Math.PI * 2); ctx.fill();
+
+      // 칼몸: 칼등(-n) 곡선과 칼날(+n) 곡선으로 감싼 면, 칼끝은 비스듬한 키사키
+      ctx.save();
+      ctx.globalAlpha *= tipA * 0.25 + 0.75;
+      ctx.fillStyle = `rgb(${PAL.player})`;
+      ctx.beginPath();
+      ctx.moveTo(side(base, -wb).x, side(base, -wb).y);
+      ctx.quadraticCurveTo(side(ctrl, -wb * 0.8).x, side(ctrl, -wb * 0.8).y, side(nearC, -wt).x, side(nearC, -wt).y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.lineTo(side(nearC, wt).x, side(nearC, wt).y);
+      ctx.quadraticCurveTo(side(ctrl, wb * 0.8).x, side(ctrl, wb * 0.8).y, side(base, wb).x, side(base, wb).y);
+      ctx.closePath();
+      ctx.fill();
+      // 날 안쪽의 번뜩임: 칼날 쪽을 따라 밝은 띠 (한지 위에서도 어두운 칼이 날카롭게 읽히도록)
+      ctx.fillStyle = `rgba(${PAL.playerCore},${0.95 * tipA})`;
+      ctx.beginPath();
+      ctx.moveTo(side(base, wb * 0.15).x, side(base, wb * 0.15).y);
+      ctx.quadraticCurveTo(side(ctrl, wb * 0.2).x, side(ctrl, wb * 0.2).y, side(nearC, wt * 0.3).x, side(nearC, wt * 0.3).y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.lineTo(side(nearC, wt * 0.85).x, side(nearC, wt * 0.85).y);
+      ctx.quadraticCurveTo(side(ctrl, wb * 0.7).x, side(ctrl, wb * 0.7).y, side(base, wb * 0.7).x, side(base, wb * 0.7).y);
+      ctx.closePath();
+      ctx.fill();
+      // 칼등 능선: 먹선 한 줄로 또렷하게
+      ctx.strokeStyle = `rgba(${PAL.ink},0.7)`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(side(base, -wb).x, side(base, -wb).y);
+      ctx.quadraticCurveTo(side(ctrl, -wb * 0.8).x, side(ctrl, -wb * 0.8).y, side(nearC, -wt).x, side(nearC, -wt).y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
       ctx.restore();
 
-      // 날: 손바닥이 카메라를 볼수록 칼 면이 넓게, 옆으로 세우면 날 끝(edge)만 얇게
-      // 원근(persp): +면 칼끝이 플레이어 쪽으로 튀어나옴(굵고 밝게), -면 화면 안쪽으로 들어감(가늘고 흐리게)
-      const raw = this.depth || 0;
-      // MediaPipe z는 카메라에 가까울수록 음수. 기본(-raw)은 '카메라 쪽 = 튀어나옴', 반전 시 '카메라 쪽 = 화면 안쪽'
-      const persp = Math.max(-1, Math.min(1, (C.depthInvert ? raw : -raw) * C.depthGain));
-      const faceW = 0.35 + 0.75 * (this.face ?? 1);
-      const tipScale = Math.max(0.22, Math.min(2.4, 1 + persp * 1.4));
-      const wb = w * 0.55 * faceW * Math.max(0.8, 1 - persp * 0.25); // 손 쪽은 반대로 약간
-      const wt = w * 0.42 * faceW * tipScale;
-      const nearTip = add(tip, mul(d, -Math.max(w * 2, wt * 4)));
-      const baseA = Math.max(0.7, Math.min(1, 0.95 + persp * 0.1));
-      const tipA = Math.max(0.18, Math.min(1, 0.92 + persp * 0.75)); // 안쪽으로 갈수록 칼끝이 안개처럼 흐려짐
-      const lit = this.faceSign > 0;
-      // 두 면을 다른 색으로(밝은 면 = 흰빛, 어두운 면 = 푸른빛) + 칼자루→칼끝 그라데이션으로 깊이감
-      const half = (side, k) => {
-        const lightSide = k === 1;
-        const grd = ctx.createLinearGradient(base.x, base.y, tip.x, tip.y);
-        grd.addColorStop(0, `rgba(${lightSide ? PAL.playerCore : PAL.player},${baseA})`);
-        grd.addColorStop(1, `rgba(${lightSide ? '200,232,255' : PAL.player},${tipA * (lightSide ? 1 : 0.85)})`);
-        ctx.fillStyle = grd;
-        ctx.beginPath();
-        ctx.moveTo(base.x, base.y);
-        ctx.lineTo(base.x + n.x * wb * side, base.y + n.y * wb * side);
-        ctx.lineTo(nearTip.x + n.x * wt * side, nearTip.y + n.y * wt * side);
-        ctx.lineTo(tip.x, tip.y);
-        ctx.closePath();
-        ctx.fill();
-      };
-      half(1, lit ? 1 : 0.62);
-      half(-1, lit ? 0.62 : 1);
-      // 칼등 능선
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = `rgba(255,255,255,${tipA})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-      // 칼끝이 플레이어 쪽으로 튀어나오면 반짝임
-      if (persp > 0.25) {
-        const g = Math.min(1, (persp - 0.25) / 0.5);
-        const r = wt * 3 + 6;
-        const grd = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, r);
-        grd.addColorStop(0, `rgba(255,255,255,${0.95 * g})`);
-        grd.addColorStop(0.4, `rgba(${PAL.player},${0.6 * g})`);
-        grd.addColorStop(1, `rgba(${PAL.player},0)`);
-        ctx.fillStyle = grd;
-        ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.shadowBlur = glow(this.slashing ? 28 : 14);
-
-      // 코등이: 손잡이와 날 사이의 둥근 원판
+      // 코등이: 먹색 원판 + 쪽빛 테
       ctx.save();
       ctx.translate(base.x, base.y);
       ctx.rotate(Math.atan2(d.y, d.x));
-      ctx.fillStyle = 'rgba(20,30,58,0.95)';
-      ctx.strokeStyle = `rgb(${PAL.playerCore})`;
-      ctx.lineWidth = 2;
+      ctx.fillStyle = `rgb(${PAL.ink})`;
+      ctx.strokeStyle = `rgb(${PAL.player})`;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.ellipse(0, 0, w * 0.75, w * 2.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, w * 0.7, w * 2.3, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -427,7 +421,7 @@ export class Sword {
       ctx.lineWidth = 1;
       for (const sw of this.debugSweeps) {
         if (now - sw.ts > 300) continue;
-        ctx.strokeStyle = sw.slashing ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)';
+        ctx.strokeStyle = sw.slashing ? `rgba(${PAL.ink},0.8)` : `rgba(${PAL.ink},0.25)`;
         ctx.beginPath();
         ctx.moveTo(sw.h0.x, sw.h0.y);
         ctx.lineTo(sw.t0.x, sw.t0.y);

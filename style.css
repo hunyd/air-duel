@@ -1,11 +1,18 @@
 :root {
-  --glass: rgba(255, 255, 255, 0.14);
-  --glass-strong: rgba(255, 255, 255, 0.24);
-  --glass-border: rgba(255, 255, 255, 0.38);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  --white: #fff;
-  --white-dim: rgba(255, 255, 255, 0.62);
-  --font: "SF Pro Display", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* 수묵화풍: 한지 바탕 + 먹 글자. 변수 이름(--white 등)은 기존 코드 호환을 위해 유지 — 값은 '먹' */
+  --paper: rgb(243, 238, 227);
+  --ink: rgb(24, 21, 23);
+  --ai: rgb(34, 62, 132);      /* 쪽빛: 나 */
+  --shu: rgb(200, 52, 38);     /* 주홍: 상대 */
+  --kin: rgb(184, 138, 44);    /* 금박: 기회 */
+  --glass: rgba(250, 246, 236, 0.82);
+  --glass-strong: rgba(250, 246, 236, 0.96);
+  --glass-border: rgba(24, 21, 23, 0.55);
+  --glass-shadow: 3px 4px 0 rgba(24, 21, 23, 0.12);
+  --white: rgb(24, 21, 23);
+  --white-dim: rgba(24, 21, 23, 0.6);
+  --font: "Shippori Mincho", "Hiragino Mincho ProN", "Noto Serif KR", serif;
+  --brush: "Yuji Syuku", "Shippori Mincho", serif;
 }
 
 * { box-sizing: border-box; }
@@ -15,7 +22,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0d0f12;
+  background: var(--paper);
   color: var(--white);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -23,7 +30,10 @@ html, body {
 }
 
 body {
-  background: radial-gradient(120% 90% at 50% 40%, #2a2f38 0%, #14171c 60%, #0b0d10 100%);
+  background:
+    radial-gradient(120% 95% at 50% 42%, rgba(243, 238, 227, 0) 55%, rgba(120, 104, 84, 0.22) 100%),
+    radial-gradient(60% 40% at 30% 20%, rgba(255, 252, 244, 0.8), rgba(255, 252, 244, 0) 70%),
+    var(--paper);
 }
 
 .layer {
@@ -70,8 +80,6 @@ body {
   background: var(--glass);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
 }
 
 .hidden { display: none !important; }
@@ -93,6 +101,7 @@ body {
 
 .hp {
   display: flex;
+  border-radius: 4px 18px 6px 16px !important;
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
@@ -111,24 +120,24 @@ body {
   flex: 1;
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(24, 21, 23, 0.12);
   overflow: hidden;
+  clip-path: polygon(0 35%, 3% 0, 100% 10%, 98% 100%, 1% 90%);
 }
 
 .hp-fill {
   height: 100%;
   width: 100%;
   border-radius: inherit;
-  background: var(--white);
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+  background: var(--ai);
   transition: width 0.18s ease-out;
 }
-#hp-rival .hp-fill { margin-left: auto; }
+#hp-rival .hp-fill { margin-left: auto; background: var(--shu); }
 .bars { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .mo-row { display: flex; align-items: center; gap: 8px; }
 .mo-row span { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; opacity: 0.75; }
-.mo-track { flex: 1; height: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
-.mo-fill { height: 100%; width: 60%; margin-left: auto; background: rgba(255, 255, 255, 0.85); transition: width 0.25s ease-out; }
+.mo-track { flex: 1; height: 3px; border-radius: 999px; background: rgba(24, 21, 23, 0.15); overflow: hidden; }
+.mo-fill { height: 100%; width: 60%; margin-left: auto; background: var(--shu); transition: width 0.25s ease-out; }
 
 #center-stat {
   display: flex;
@@ -139,6 +148,7 @@ body {
   min-width: 140px;
 }
 #stat-main { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; }
+#stat-sub { font-family: var(--brush); }
 #stat-sub { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---------- 배너 / 힌트 ---------- */
@@ -148,9 +158,9 @@ body {
   left: 50%;
   transform: translate(-50%, -50%) scale(0.92);
   font-size: clamp(32px, 6vw, 72px);
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.7);
+  font-family: var(--brush);
+  font-weight: 400;
+  letter-spacing: 0.08em;
   opacity: 0;
   transition: opacity 0.18s, transform 0.18s;
   white-space: nowrap;
@@ -167,7 +177,6 @@ body {
   font-weight: 500;
   letter-spacing: 0.06em;
   color: var(--white);
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
   opacity: 0;
   transition: opacity 0.25s;
   white-space: nowrap;
@@ -186,17 +195,18 @@ body {
   text-align: center;
   pointer-events: auto;
 }
-#panel-title { font-size: 28px; font-weight: 800; letter-spacing: 0.14em; }
+#panel-title { font-family: var(--brush); font-size: 34px; font-weight: 400; letter-spacing: 0.1em; }
 #panel-sub { margin-top: 6px; font-size: 14px; color: var(--white-dim); letter-spacing: 0.06em; min-height: 1em; }
 #panel-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
 
 .pbtn {
+  border-radius: 6px 16px 8px 14px !important;
   position: relative;
   overflow: hidden;
   padding: 15px 18px;
   border-radius: 16px;
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(250, 246, 236, 0.9);
   color: var(--white);
   font: 700 15px var(--font);
   letter-spacing: 0.14em;
@@ -209,7 +219,7 @@ body {
   inset: 0;
   transform-origin: left;
   transform: scaleX(var(--dwell, 0));
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(24, 21, 23, 0.14);
 }
 .pbtn span { position: relative; }
 .pbtn:hover, .pbtn.hover { background: var(--glass-strong); transform: scale(1.02); }
@@ -227,8 +237,8 @@ body {
 #palm-charge { width: 80px; height: 80px; margin: -40px 0 0 -40px; }
 #cursor.show, #palm-charge.show { opacity: 1; }
 #cursor svg, #palm-charge svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
-.track { fill: rgba(255, 255, 255, 0.12); stroke: rgba(255, 255, 255, 0.5); stroke-width: 2; }
-.prog { fill: none; stroke: var(--white); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)); }
+.track { fill: rgba(24, 21, 23, 0.06); stroke: rgba(24, 21, 23, 0.45); stroke-width: 2; }
+.prog { fill: none; stroke: var(--white); stroke-width: 4; stroke-linecap: round; }
 .dot { fill: var(--white); }
 
 /* ---------- 하단 도크 ---------- */
@@ -243,7 +253,7 @@ body {
   gap: 4px;
   padding: 6px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(250, 246, 236, 0.85);
 }
 #dock .item {
   display: flex;
@@ -268,9 +278,8 @@ body {
 #dock .item span { font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em; }
 #dock .item.active {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.24);
+  background: rgba(24, 21, 23, 0.12);
   transform: translateX(2px);
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.35);
 }
 
 /* ---------- 상태 UI ---------- */
@@ -301,14 +310,14 @@ body {
   background: var(--white);
   animation: pulse 1.1s ease-in-out infinite;
 }
-#status[data-kind="ok"] #status-dot { animation: none; box-shadow: 0 0 8px #fff; }
-#status[data-kind="error"] #status-dot { animation: none; background: transparent; border: 2px solid #fff; }
+#status[data-kind="ok"] #status-dot { animation: none; }
+#status[data-kind="error"] #status-dot { animation: none; background: transparent; border: 2px solid var(--shu); }
 #status-retry {
   flex: none;
   padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(24, 21, 23, 0.08);
   color: var(--white);
   font: 700 11px var(--font);
   letter-spacing: 0.12em;
