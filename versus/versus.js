@@ -13,7 +13,7 @@ import { drawHand } from '../hand.js';
 // 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
 const SPEED_OK = '46,150,112';
 const FIZZLE = '128,124,126'; // 무효 공격 궤적
-const SLASH_OK = '30,96,232';  // 공격 판정된 궤적: 평소 쪽빛보다 밝고 선명하게
+const SLASH_OK = SPEED_OK;     // 공격 판정된 궤적: 유효 속도 색(민트)으로 굵게
 const UI = {
   poseHz: 15,            // 상대에게 내 칼 자세를 보내는 빈도
   countdownMs: 3000,
@@ -89,6 +89,9 @@ function onResult(m) {
   gesture = gestures.update(hand ? hand.world : null, m.ts);
   sword.update(hand && gesture.state === 'GRIP' ? hand.pts : null, m.ts, view, hand?.world);
   sword.sweeps.length = 0; // 멀티에서는 스윕 충돌 대신 방향 판정만 사용
+  // 궤적 색: 기본 쪽빛, 공격 유효 속도 구간이면 게이지 유효 구간과 같은 민트로
+  const last = sword.trail[sword.trail.length - 1];
+  if (last && !last.tint && last.speed >= VS_CONFIG.speedMin && last.speed <= VS_CONFIG.speedMax) last.tint = SPEED_OK;
   combat.onSword(sword, m.ts, reticle(geo()));
   drawSkeleton();
 }
