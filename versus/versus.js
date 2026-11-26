@@ -2,7 +2,7 @@
 // 싱글플레이 모듈 재사용: 제스처(gestures.js), 칼(sword.js), 이펙트·캐릭터(game.js), 추론(tracker.js + worker.js)
 import { GestureTracker } from '../gestures.js';
 import { Sword, lerpPt } from '../sword.js';
-import { FX, drawFigure } from '../game.js';
+import { FX, drawFigure, FIG_SCALE } from '../game.js';
 import { HandTracker } from '../tracker.js';
 import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
@@ -316,8 +316,8 @@ let oppFlash = 0;
 let lastLaunch = 0;
 
 function geo() {
-  const s = Math.min(view.W, view.H) * 0.62;
-  return { s, ex: view.W / 2, ey: view.H * 0.53 };
+  const m = Math.min(view.W, view.H), s = m * FIG_SCALE;
+  return { s, ex: view.W / 2, ey: view.H * 0.53 - 0.585 * (0.62 - FIG_SCALE) * m };
 }
 function reticle(g) { return { x: g.ex, y: g.ey - 0.14 * g.s, r: 0.42 * g.s }; }
 function sidePoint(side, scale = 1) {
