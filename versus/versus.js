@@ -6,6 +6,7 @@ import { FX, drawFigure } from '../game.js';
 import { HandTracker } from '../tracker.js';
 import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
+import { PAL, glow } from '../palette.js';
 
 const UI = {
   poseHz: 15,            // 상대에게 내 칼 자세를 보내는 빈도
@@ -293,6 +294,7 @@ function sidePoint(side, scale = 1) {
   return { x: rc.x + Math.cos(a) * rc.r * scale, y: rc.y + Math.sin(a) * rc.r * scale };
 }
 
+// 색 체계는 싱글과 동일: 나 = 청백(PAL.player), 상대 = 붉은(PAL.enemy), 기회·패링 = 금(PAL.vital), 피격 = PAL.hurt
 function handleEvents(t) {
   const g = geo();
   for (const e of combat.events.splice(0)) {
@@ -301,33 +303,42 @@ function handleEvents(t) {
     } else if (e.type === 'defense') {
       const p = sidePoint(e.side);
       if (e.outcome === 'hit') {
-        fx.crack(p.x, p.y, g.s * 0.25); fx.flash = 0.65; fx.kick(14); fx.stop(110);
+        fx.crack(p.x, p.y, g.s * 0.25, PAL.hurt); fx.flash = 0.65; fx.flashColor = PAL.hurt; fx.kick(14); fx.stop(110);
         showBanner(`−${e.dmg}`, 600, true);
       } else if (e.outcome === 'block') {
-        fx.sparks(p.x, p.y, 18, g.s * 1.4); fx.kick(4); fx.stop(50);
+        fx.shield(p.x, p.y, g.s * 0.09, PAL.player, 0.32);
+        fx.sparks(p.x, p.y, 18, g.s * 1.4, null, Math.PI * 2, PAL.spark); fx.kick(4); fx.stop(50);
         showBanner('BLOCK', 450, true);
       } else if (e.outcome === 'parry') {
-        fx.sparks(p.x, p.y, 34, g.s * 2.2); fx.ring(p.x, p.y, 10, g.s * 0.35, 0.4, 5); fx.flash = 0.3; fx.stop(100); fx.kick(8);
+        fx.shield(p.x, p.y, g.s * 0.14, PAL.player);
+        fx.sparks(p.x, p.y, 34, g.s * 2.2, null, Math.PI * 2, PAL.spark);
+        fx.ring(p.x, p.y, 10, g.s * 0.35, 0.4, 5, PAL.vital);
+        fx.flash = 0.3; fx.flashColor = PAL.vital; fx.stop(100); fx.kick(8);
         showBanner('PARRY!', 800, true);
       } else if (e.outcome === 'break') {
-        fx.ring(p.x, p.y, 10, g.s * 0.5, 0.45, 6); fx.flash = 0.5; fx.kick(12); fx.stop(110);
+        fx.ring(p.x, p.y, 10, g.s * 0.5, 0.45, 6, PAL.enemy); fx.flash = 0.5; fx.flashColor = PAL.hurt; fx.kick(12); fx.stop(110);
         showBanner('GUARD BROKEN', 900, true);
       } else if (e.outcome === 'counter') {
-        fx.sparks(p.x, p.y, 26, g.s * 1.8); fx.ring(p.x, p.y, 10, g.s * 0.3, 0.35, 4);
+        fx.sparks(p.x, p.y, 26, g.s * 1.8, null, Math.PI * 2, PAL.spark); fx.ring(p.x, p.y, 10, g.s * 0.3, 0.35, 4, PAL.player);
         showBanner('COUNTER!', 700, true);
       }
     } else if (e.type === 'attackResult') {
       const p = lerpPt(sidePoint(e.side ?? 'CENTER', 0.5), sidePoint('CENTER'), 0.4);
       if (e.outcome === 'hit') {
-        oppFlash = 1; fx.sparks(p.x, p.y, 24, g.s * 1.8); fx.stop(70); fx.kick(6);
+        oppFlash = 1;
+        const ang = e.side === 'LEFT' ? 0 : e.side === 'RIGHT' ? Math.PI : Math.PI / 2;
+        fx.slash(p.x, p.y, ang, g.s * 0.5, PAL.player);
+        fx.sparks(p.x, p.y, 24, g.s * 1.8, null, Math.PI * 2, PAL.vital); fx.stop(70); fx.kick(6);
         showBanner('HIT', 450, true);
       } else if (e.outcome === 'block') {
-        fx.sparks(p.x, p.y, 12, g.s); showBanner('BLOCKED', 500, true);
+        fx.shield(p.x, p.y, g.s * 0.08, PAL.enemy, 0.3);
+        fx.sparks(p.x, p.y, 12, g.s, null, Math.PI * 2, PAL.spark); showBanner('BLOCKED', 500, true);
       } else if (e.outcome === 'parry') {
-        fx.flash = 0.4; fx.kick(10); showBanner('PARRIED — STUNNED', 900, true);
+        fx.flash = 0.4; fx.flashColor = PAL.hurt; fx.kick(10); showBanner('PARRIED — STUNNED', 900, true);
       } else if (e.outcome === 'break') {
-        fx.ring(p.x, p.y, 10, g.s * 0.45, 0.4, 5); showBanner('GUARD BREAK!', 800, true);
+        fx.ring(p.x, p.y, 10, g.s * 0.45, 0.4, 5, PAL.player); showBanner('GUARD BREAK!', 800, true);
       } else if (e.outcome === 'counter') {
+        fx.sparks(p.x, p.y, 20, g.s * 1.4, null, Math.PI * 2, PAL.spark);
         showBanner('COUNTERED', 700, true);
       }
     } else if (e.type === 'dead') {
@@ -391,12 +402,12 @@ function renderWorld(t, dt) {
   oppFlash = Math.max(0, oppFlash - dt * 4);
   if (oppStunned) {
     c.save();
-    c.fillStyle = '#fff';
+    c.fillStyle = `rgb(${PAL.vital})`;
     c.font = `800 ${Math.round(g.s * 0.05)}px ${getComputedStyle(document.body).fontFamily}`;
     c.textAlign = 'center';
-    c.shadowColor = 'rgba(255,255,255,0.9)';
-    c.shadowBlur = 12;
-    c.fillText('OPENING', g.ex, g.ey - 0.58 * g.s);
+    c.shadowColor = `rgba(${PAL.vital},0.9)`;
+    c.shadowBlur = glow(12);
+    c.fillText('OPENING', g.ex, g.ey + 0.56 * g.s); // 발 아래: 위쪽 공격 표시와 겹치지 않게
     c.restore();
   }
   if (match.phase === 'fight') drawReticle(c, g, t);
@@ -413,9 +424,10 @@ function drawReticle(c, g, t) {
   for (const side of ['LEFT', 'TOP', 'RIGHT']) {
     const a = SIDE_ANG[side];
     const mine = combat.guard === side;
-    c.shadowColor = 'rgba(255,255,255,0.9)';
-    c.shadowBlur = mine ? 16 : 0;
-    c.strokeStyle = mine ? '#fff' : 'rgba(255,255,255,0.22)';
+    // 내 가드 = 청백
+    c.shadowColor = `rgba(${PAL.player},0.9)`;
+    c.shadowBlur = mine ? glow(16) : 0;
+    c.strokeStyle = mine ? `rgb(${PAL.playerCore})` : 'rgba(255,255,255,0.22)';
     c.lineWidth = mine ? 8 : 3;
     c.beginPath(); c.arc(rc.x, rc.y, rc.r, a - span / 2, a + span / 2); c.stroke();
   }
@@ -423,9 +435,11 @@ function drawReticle(c, g, t) {
     const p = Math.min(1, (t - inc.start) / inc.windup);
     const inWindow = inc.impactAt - t <= VS_CONFIG.parryWindow;
     const blink = inWindow ? 0.5 + 0.5 * Math.sin(t / 30) : 1;
-    c.shadowColor = 'rgba(255,255,255,0.95)';
-    c.shadowBlur = 20;
-    c.strokeStyle = `rgba(255,255,255,${0.35 + 0.65 * blink})`;
+    // 들어오는 공격 = 붉은색, 패링 타이밍(착지 직전) = 금색으로 깜빡임
+    const col = inWindow && inc.kind === 'slash' ? PAL.vital : PAL.enemy;
+    c.shadowColor = `rgba(${col},0.95)`;
+    c.shadowBlur = glow(20);
+    c.strokeStyle = `rgba(${col},${0.35 + 0.65 * blink})`;
     if (inc.kind === 'thrust') {
       // 가운데로 조여드는 마름모 = 가드 브레이크 (찌르기로 받아쳐야 함)
       const r = rc.r * (0.55 - 0.4 * p);
@@ -433,7 +447,7 @@ function drawReticle(c, g, t) {
       c.beginPath();
       c.moveTo(rc.x, rc.y - r); c.lineTo(rc.x + r, rc.y); c.lineTo(rc.x, rc.y + r); c.lineTo(rc.x - r, rc.y);
       c.closePath(); c.stroke();
-      c.fillStyle = `rgba(255,255,255,${0.15 + 0.35 * p})`;
+      c.fillStyle = `rgba(${PAL.enemy},${0.15 + 0.35 * p})`;
       c.fill();
       continue;
     }
