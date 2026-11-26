@@ -38,7 +38,7 @@ export const VS_CONFIG = {
     recoverAt: 35,      // 바닥난 뒤 이만큼 차야 다시 공격 가능
   },
 
-  guardTilt: 25,       // 칼을 수직에서 이 각도 이상 기울이면 좌/우 가드, 아니면 위 가드
+  guardTop: 50,        // 칼날 중심이 과녁 중심에서 위쪽 ±이 각도 안에 있으면 위 가드, 그 밖은 좌/우
   guardHyst: 8,
   hp: 100,
   winsNeeded: 2,
@@ -49,17 +49,14 @@ const C = VS_CONFIG;
 // 상대와 마주 보고 있으므로 내 왼쪽 공격은 상대 화면에서 오른쪽에서 들어온다
 export const flipSide = (s) => (s === 'LEFT' ? 'RIGHT' : s === 'RIGHT' ? 'LEFT' : s);
 
-// 칼 각도(칼자루→칼끝, 화면 기준 deg) → 가드 방향
-export function guardFromAngle(angleDeg, prev) {
-  const r = (angleDeg * Math.PI) / 180;
-  const dx = Math.cos(r), dy = Math.sin(r);
-  if (dy < -0.25) {
-    const theta = (Math.atan2(dx, -dy) * 180) / Math.PI; // 0 = 수직, 음수 = 왼쪽으로 기움
-    let g = theta < -C.guardTilt ? 'LEFT' : theta > C.guardTilt ? 'RIGHT' : 'TOP';
-    if (prev && g !== prev && Math.abs(Math.abs(theta) - C.guardTilt) < C.guardHyst) g = prev;
-    return g;
-  }
-  return dx < 0 ? 'LEFT' : 'RIGHT';
+// 가드 방향 = 칼날이 '어디에 놓였나': 칼날 중간점이 과녁 중심(center)에서 어느 쪽에 있는지.
+// 손 위치와 칼 기울기가 함께 반영된다 (왼쪽으로 칼을 들어 올리면 LEFT, 머리 위로 가로 들면 TOP).
+export function guardFromBlade(base, tip, center, prev) {
+  const m = { x: (base.x + tip.x) / 2, y: (base.y + tip.y) / 2 };
+  const theta = (Math.atan2(m.x - center.x, center.y - m.y) * 180) / Math.PI; // 0 = 바로 위, 음수 = 왼쪽, ±180 = 아래
+  let g = theta < -C.guardTop ? 'LEFT' : theta > C.guardTop ? 'RIGHT' : 'TOP';
+  if (prev && g !== prev && Math.abs(Math.abs(theta) - C.guardTop) < C.guardHyst) g = prev;
+  return g;
 }
 
 // 휘두른 방향(칼끝 이동) → 공격 방향 (왼→오른쪽 = 왼쪽 공격, 위→아래 = 위 공격)
@@ -142,9 +139,10 @@ export class Combat {
   }
 
   // 추론 결과마다 호출
-  onSword(sword, ts) {
+  // center: 화면의 가드 과녁 중심 (상대 상체)
+  onSword(sword, ts, center) {
     const stunned = this.stunned(ts);
-    this.guard = sword.active && !stunned ? guardFromAngle(sword.angle, this.guard) : null;
+    this.guard = sword.active && !stunned ? guardFromBlade(sword.base, sword.tip, center, this.guard) : null;
     const thrusts = sword.thrusts.splice(0);
 
     // 스턴 중(칼이 손 위치로 돌아가는 구간 포함)의 움직임은 휘두르기로 치지 않는다

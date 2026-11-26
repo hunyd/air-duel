@@ -89,7 +89,7 @@ function onResult(m) {
   gesture = gestures.update(hand ? hand.world : null, m.ts);
   sword.update(hand && gesture.state === 'GRIP' ? hand.pts : null, m.ts, view, hand?.world);
   sword.sweeps.length = 0; // 멀티에서는 스윕 충돌 대신 방향 판정만 사용
-  combat.onSword(sword, m.ts);
+  combat.onSword(sword, m.ts, reticle(geo()));
   drawSkeleton();
 }
 
@@ -660,9 +660,9 @@ function updateHud(t) {
     else if (!sword.active) hint = 'Make a fist to draw your sword';
     else if (stunned) hint = 'Stunned!';
     else if (combat.incoming.some((a) => a.kind === 'thrust')) hint = 'Guard break incoming — push to counter';
-    else if (combat.incoming.length) hint = 'Tilt your blade to the glowing side — or slash back to parry';
+    else if (combat.incoming.length) hint = 'Move your blade to the red side — or slash back to parry';
     else if (combat.exhausted) hint = 'Out of stamina — hold your guard and breathe';
-    else if (match.phase === 'fight') hint = 'Tilt to guard  ·  swing → ← ↓ at mid speed  ·  push to break';
+    else if (match.phase === 'fight') hint = 'Blade on a side to guard  ·  swing → ← ↓ at mid speed  ·  push to break';
   }
   $('hint').textContent = hint;
   $('hint').classList.toggle('show', !!hint);
