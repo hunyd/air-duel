@@ -54,80 +54,115 @@ export function drawHand(ctx, pts, center, scale = 1) {
   ctx.restore();
 }
 
-// 칼을 쥔 주먹 (1인칭): 화면은 이미 좌우 거울이라 점의 2D 위치는 그대로 두고 '앞뒤만' 뒤집는다.
-// 카메라는 손가락 안쪽을 보지만 나는 손등을 본다 → 그리는 순서를
-//   엄지·손가락(그늘, 칼자루 뒤) → 칼자루 → 손등(맨 앞, 관절 볼록) 으로.
-export function drawGripHand(ctx, pts, sword, scale = 1) {
+// 칼을 쥔 주먹 (1인칭): 손 인식 점이 아니라 '칼자루'(위치·방향·palmPx)를 기준으로 그린 정형화된 주먹.
+// 손 점은 손등이 칼자루의 어느 쪽에 있는지(한 비트)만 쓰고, 나머지 모양은 매번 같은 틀이라 흔들리지 않는다.
+// 손등(뒤) → 칼자루를 가로질러 감싼 손가락 네 마디 → 엄지. 원통 음영·그림자로 종잇장 느낌을 줄인다.
+export function drawGripHand(ctx, pts, sword) {
   const c = sword.hilt;
-  const p = pts.map((q) => ({ x: c.x + (q.x - c.x) * scale, y: c.y + (q.y - c.y) * scale }));
   const d0 = { x: sword.tip.x - sword.base.x, y: sword.tip.y - sword.base.y };
   const dl = Math.hypot(d0.x, d0.y) || 1;
   const d = { x: d0.x / dl, y: d0.y / dl };
   const n = { x: -d.y, y: d.x };
-  const palmW = Math.max(18, Math.hypot(p[5].x - p[17].x, p[5].y - p[17].y));
-  // 손등(관절 줄)이 칼자루의 어느 쪽에 있는지: n 방향 부호
-  const kn = [5, 9, 13, 17].reduce((a, i) => ({ x: a.x + p[i].x / 4, y: a.y + p[i].y / 4 }), { x: 0, y: 0 });
-  const side = Math.sign((kn.x - c.x) * n.x + (kn.y - c.y) * n.y) || 1;
+  const palmW = Math.max(18, (sword.palmPx || 60) * 0.72);
+  // 손등 방향: 관절(5,9,13,17) 평균이 칼자루의 어느 쪽인지. 경계에서 깜빡이지 않게 히스테리시스
+  const kn = [5, 9, 13, 17].reduce((a, i) => ({ x: a.x + pts[i].x / 4, y: a.y + pts[i].y / 4 }), { x: 0, y: 0 });
+  const proj = ((kn.x - c.x) * n.x + (kn.y - c.y) * n.y) / palmW;
+  if (!sword.gripSide || proj * sword.gripSide < -0.12) sword.gripSide = proj < 0 ? -1 : 1;
+  const side = sword.gripSide;
   const at = (along, across) => ({ x: c.x + d.x * along * palmW + n.x * across * palmW * side, y: c.y + d.y * along * palmW + n.y * across * palmW * side });
-  const outline = `rgb(${PAL.ink})`, skin = 'rgb(236,226,209)', shade = 'rgb(176,163,143)';
-  const capsule = (a, b, w, fill) => {
-    for (const [col, lw] of [[outline, w + 3], [fill, w]]) {
-      ctx.strokeStyle = col; ctx.lineWidth = lw;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
+  const outline = `rgb(${PAL.ink})`;
+  const fw = palmW * 0.25;
+
+  // 원통 음영: a→b 축에 수직인 방향으로 어두움-밝음-어두움 (빛은 화면 왼쪽 위)
+  const cylinder = (a, b, w, tone) => {
+    const ax = b.x - a.x, ay = b.y - a.y, l = Math.hypot(ax, ay) || 1;
+    let px = -ay / l, py = ax / l;
+    if (px + py > 0) { px = -px; py = -py; } // 밝은 쪽을 왼쪽 위로
+    const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    const g = ctx.createLinearGradient(m.x + px * w / 2, m.y + py * w / 2, m.x - px * w / 2, m.y - py * w / 2);
+    g.addColorStop(0, tone[1]); g.addColorStop(0.3, tone[0]); g.addColorStop(1, tone[2]);
+    return g;
   };
-  const polygon = (pts2, fill, lw = 3) => {
+  const SKIN = ['rgb(246,236,220)', 'rgb(226,212,190)', 'rgb(168,148,124)'];
+  const capsule = (a, b, w, tone) => {
+    ctx.strokeStyle = outline; ctx.lineWidth = w + 3;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = cylinder(a, b, w, tone); ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // 칼자루 뒤로 말려 들어가는 끝은 어둡게
+    const g = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+    g.addColorStop(0, `rgba(${PAL.ink},0)`); g.addColorStop(0.55, `rgba(${PAL.ink},0)`); g.addColorStop(1, `rgba(${PAL.ink},0.32)`);
+    ctx.strokeStyle = g;
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  };
+  const fingers = [0, 1, 2, 3].map((i) => {
+    const along = 0.36 - i * 0.24;
+    return [at(along, 0.3), at(along - 0.03, -0.22)];
+  });
+  const thumb = [at(0.26, 0.44), at(0.52, -0.04)];
+  const dorsumPath = () => {
+    const k0 = at(0.46, 0.3), k1 = at(-0.5, 0.3), w0 = at(-0.42, 1.25), w1 = at(0.3, 1.3);
+    const s0 = at(-0.62, 0.75), s1 = at(0.5, 0.8);
     ctx.beginPath();
-    pts2.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    ctx.moveTo(k0.x, k0.y);
+    ctx.lineTo(k1.x, k1.y);
+    ctx.quadraticCurveTo(s0.x, s0.y, w0.x, w0.y);
+    ctx.lineTo(w1.x, w1.y);
+    ctx.quadraticCurveTo(s1.x, s1.y, k0.x, k0.y);
     ctx.closePath();
-    ctx.fillStyle = fill; ctx.fill();
-    ctx.strokeStyle = outline; ctx.lineWidth = lw; ctx.stroke();
   };
 
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  const fw = palmW * 0.24;
 
-  // 1) 뒤쪽: 칼자루 너머로 감긴 손가락 끝(그늘) — 칼자루 반대편으로 살짝만 삐져나옴
-  for (let i = 3; i >= 0; i--) {
-    const along = 0.33 - i * 0.22;
-    capsule(at(along, 0.05), at(along - 0.03, -0.24), fw, shade);
-  }
-  // 엄지: 손등 반대쪽(칼자루 앞)을 감싸므로 그늘 쪽, 검지 옆 끝만 보임
-  capsule(at(0.32, 0.1), at(0.52, -0.12), fw * 0.95, shade);
-
-  // 2) 칼자루를 손가락 위에 다시 그림 → 손가락이 칼자루 뒤로 감긴 것처럼
-  const hw = Math.max(4, palmW * 0.13);
-  const h0 = at(-0.62, 0), h1 = at(0.5, 0);
-  polygon([
-    { x: h0.x + n.x * hw, y: h0.y + n.y * hw }, { x: h1.x + n.x * hw, y: h1.y + n.y * hw },
-    { x: h1.x - n.x * hw, y: h1.y - n.y * hw }, { x: h0.x - n.x * hw, y: h0.y - n.y * hw },
-  ], 'rgb(20,30,62)', 1.5);
-
-  // 3) 맨 앞: 손등 — 손목에서 칼자루 위 관절 줄까지 덮음
-  const wrist = p[0];
-  const knuckles = [0.36, 0.13, -0.1, -0.32].map((al) => at(al, 0.02));
-  polygon([
-    at(0.47, 0.06), ...knuckles.map((q) => ({ x: q.x + n.x * palmW * 0.04 * side, y: q.y + n.y * palmW * 0.04 * side })), at(-0.5, 0.1),
-    { x: wrist.x - d.x * palmW * 0.32, y: wrist.y - d.y * palmW * 0.32 },
-    { x: wrist.x + d.x * palmW * 0.28, y: wrist.y + d.y * palmW * 0.28 },
-  ], skin);
-  // 관절 볼록: 손등 가장자리의 둥근 혹 네 개 + 손등 힘줄 선
-  ctx.fillStyle = skin;
-  ctx.strokeStyle = outline;
-  ctx.lineWidth = 2.5;
-  for (const q of knuckles) {
-    ctx.beginPath(); ctx.arc(q.x, q.y, palmW * 0.1, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  }
-  ctx.strokeStyle = `rgba(${PAL.ink},0.35)`;
-  ctx.lineWidth = 1.5;
+  // 0) 바닥 그림자: 주먹 전체 실루엣을 오른쪽 아래로 밀어 옅은 먹으로
+  const sh = palmW * 0.09;
+  ctx.save();
+  ctx.translate(sh, sh * 1.4);
+  ctx.fillStyle = ctx.strokeStyle = `rgba(${PAL.ink},0.16)`;
+  dorsumPath(); ctx.fill();
+  ctx.lineWidth = fw + 3;
   ctx.beginPath();
-  for (const q of knuckles) {
-    const w0 = { x: wrist.x + (q.x - wrist.x) * 0.25, y: wrist.y + (q.y - wrist.y) * 0.25 };
-    const k0 = { x: q.x + (wrist.x - q.x) * 0.22, y: q.y + (wrist.y - q.y) * 0.22 };
-    ctx.moveTo(w0.x, w0.y); ctx.lineTo(k0.x, k0.y);
-  }
+  for (const [a, b] of [...fingers, thumb]) { ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); }
   ctx.stroke();
+  ctx.restore();
+
+  // 1) 손등: 관절 쪽은 빛을 받고 손목 쪽으로 갈수록 어두워지는 면
+  const kA = at(0, 0.3), wA = at(0, 1.3);
+  const gd = ctx.createLinearGradient(kA.x, kA.y, wA.x, wA.y);
+  gd.addColorStop(0, 'rgb(228,214,192)'); gd.addColorStop(0.45, 'rgb(206,190,166)'); gd.addColorStop(1, 'rgb(150,132,110)');
+  dorsumPath();
+  ctx.fillStyle = gd; ctx.fill();
+  ctx.strokeStyle = outline; ctx.lineWidth = 3; ctx.stroke();
+  // 손등 힘줄: 관절에서 손목 쪽으로 모이는 옅은 선
+  ctx.strokeStyle = 'rgba(255,248,236,0.45)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  fingers.forEach(([a], i) => { const w = at(0.1 - i * 0.12, 1.05); ctx.moveTo(a.x + (w.x - a.x) * 0.2, a.y + (w.y - a.y) * 0.2); ctx.lineTo(w.x, w.y); });
+  ctx.stroke();
+
+  // 2) 손가락 네 마디: 새끼 → 검지 (검지가 위에 겹치게), 칼자루를 가로지름
+  for (let i = 3; i >= 0; i--) capsule(fingers[i][0], fingers[i][1], fw, SKIN);
+  // 관절 하이라이트 + 칼자루 모서리에서 접히는 주름
+  for (const [a, b] of fingers) {
+    ctx.fillStyle = 'rgba(255,252,244,0.85)';
+    ctx.beginPath(); ctx.arc(a.x - fw * 0.12, a.y - fw * 0.12, fw * 0.16, 0, Math.PI * 2); ctx.fill();
+    const m = { x: a.x + (b.x - a.x) * 0.55, y: a.y + (b.y - a.y) * 0.55 };
+    ctx.strokeStyle = `rgba(${PAL.ink},0.4)`; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.moveTo(m.x - d.x * fw * 0.38, m.y - d.y * fw * 0.38);
+    ctx.lineTo(m.x + d.x * fw * 0.38, m.y + d.y * fw * 0.38);
+    ctx.stroke();
+  }
+
+  // 3) 엄지: 손등 쪽 뿌리에서 칼자루 위로 검지 옆까지 + 손톱
+  capsule(thumb[0], thumb[1], fw * 0.95, SKIN);
+  const tn = { x: thumb[0].x + (thumb[1].x - thumb[0].x) * 0.82, y: thumb[0].y + (thumb[1].y - thumb[0].y) * 0.82 };
+  ctx.fillStyle = 'rgba(255,240,232,0.9)';
+  ctx.strokeStyle = `rgba(${PAL.ink},0.45)`; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(tn.x, tn.y, fw * 0.22, fw * 0.3, Math.atan2(thumb[1].y - thumb[0].y, thumb[1].x - thumb[0].x) + Math.PI / 2, 0, Math.PI * 2);
+  ctx.fill(); ctx.stroke();
   ctx.restore();
 }
