@@ -8,7 +8,7 @@ import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
 import { Bot } from './bot.js';
 import { PAL, glow } from '../palette.js';
-import { drawHand, drawGripHand } from '../hand.js';
+import { drawHand } from '../hand.js';
 
 // 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
 const SPEED_OK = '46,150,112';
@@ -18,7 +18,7 @@ const UI = {
   countdownMs: 3000,
   roundEndMs: 2200,
   pingMs: 2000,
-  mainSkeletonScale: 0.8,
+  mainSkeletonScale: 0.6,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -111,8 +111,7 @@ function drawSkeleton() {
   if (showSkeleton) {
     // 메인 화면: 손 형태로. 칼을 쥐고 있으면 칼자루를 중심으로 축소해서 손이 칼을 감싸 쥐게
     const c = sword.active ? sword.hilt : [0, 5, 9, 13, 17].reduce((a, i) => ({ x: a.x + hand.pts[i].x / 5, y: a.y + hand.pts[i].y / 5 }), { x: 0, y: 0 });
-    if (sword.active) drawGripHand(ctx.skeleton, hand.pts, sword); // 주먹은 칼자루 기준으로 그림
-    else drawHand(ctx.skeleton, hand.pts, c, UI.mainSkeletonScale);
+    drawHand(ctx.skeleton, hand.pts, c, UI.mainSkeletonScale);
   }
 
 }
