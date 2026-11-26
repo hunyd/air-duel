@@ -6,6 +6,7 @@ import { FX, drawFigure } from '../game.js';
 import { HandTracker } from '../tracker.js';
 import { Combat, VS_CONFIG, flipSide } from './combat.js';
 import { Net } from './net.js';
+import { Bot } from './bot.js';
 import { PAL, glow } from '../palette.js';
 
 // 속도 게이지의 유효 구간 색: 기존 체계(청백 = 나, 붉은 = 상대, 금 = 기회)에 없는 민트
@@ -123,7 +124,12 @@ const net = new Net({
     if (net.code) $('room-code').textContent = net.code;
   },
 });
-const combat = new Combat((m) => net.send(m));
+// 연습 모드면 봇에게, 아니면 네트워크로
+let mode = 'online'; // 'online' | 'practice'
+let bot = null;
+const sendOut = (m) => (mode === 'practice' ? bot?.receive(m) : net.send(m));
+const linked = () => (mode === 'practice' ? !!bot : net.connected);
+const combat = new Combat((m) => sendOut(m));
 
 // phase: lobby → waiting → countdown → fight → roundEnd → (countdown …) → over
 const match = { phase: 'lobby', round: 0, me: 0, opp: 0, phaseAt: 0 };
@@ -131,7 +137,7 @@ let rtt = null;
 let pingTimer = 0;
 let rematchWanted = false;
 
-const isHost = () => net.role === 'host';
+const isHost = () => mode === 'practice' || net.role === 'host'; // 연습 모드에서는 내가 라운드 진행
 
 function onOpen() {
   match.phase = 'waiting';
@@ -142,6 +148,7 @@ function onOpen() {
 }
 
 function onClose() {
+  if (mode === 'practice') return; // 연습 시작하며 끊은 연결의 close 이벤트는 무시
   clearInterval(pingTimer);
   combat.setFighting(false);
   match.phase = 'lobby';
@@ -167,7 +174,7 @@ function onMessage(m) {
       if (isHost()) hostStartMatch();
       break;
     case 'ping':
-      net.send({ t: 'pong', ts: m.ts });
+      sendOut({ t: 'pong', ts: m.ts });
       break;
     case 'pong':
       rtt = now - m.ts;
@@ -184,7 +191,7 @@ function hostStartMatch() {
 }
 function hostBroadcast(r) {
   const msg = { t: 'round', ...r, wins: [match.me, match.opp] };
-  net.send(msg);
+  sendOut(msg);
   applyRound(msg);
 }
 function hostStartRound(n) {
@@ -255,11 +262,31 @@ function showOver(won) {
 }
 function hideLobby() { $('lobby').classList.add('hidden'); }
 
-$('btn-create').onclick = () => { net.host(); $('room-code').textContent = '····'; showLobbyWait(); };
+// 연습 모드: 네트워크 없이 같은 규칙의 봇과 대전
+function startPractice() {
+  net.destroy();
+  mode = 'practice';
+  bot = new Bot((m) => onMessage(m));
+  rtt = null;
+  match.phase = 'waiting';
+  setStatus('Practice vs bot', 'ok', null, 2000);
+  hostStartMatch();
+}
+function leavePractice() {
+  mode = 'online';
+  bot = null;
+  combat.setFighting(false);
+  match.phase = 'lobby';
+  match.round = 0;
+}
+$('btn-practice').onclick = startPractice;
+$('btn-lobby').onclick = () => { leavePractice(); net.destroy(); showLobbyStart(); };
+$('btn-create').onclick = () => { leavePractice(); net.host(); $('room-code').textContent = '····'; showLobbyWait(); };
 $('join-form').onsubmit = (e) => {
   e.preventDefault();
   const code = $('join-code').value.trim().toUpperCase();
   if (code.length < 4) { setStatus('Enter the 4-letter room code', 'error'); return; }
+  leavePractice();
   net.join(code);
   showLobbyWait();
   $('room-code').textContent = code;
@@ -271,10 +298,10 @@ $('btn-copy').onclick = async () => {
   catch { setStatus(url, 'ok'); }
 };
 $('btn-rematch').onclick = () => {
-  if (!net.connected) { showLobbyStart(); return; }
+  if (!linked()) { showLobbyStart(); return; }
   rematchWanted = true;
   $('btn-rematch').querySelector('span').textContent = 'WAITING…';
-  if (isHost()) hostStartMatch(); else net.send({ t: 'rematch' });
+  if (isHost()) hostStartMatch(); else sendOut({ t: 'rematch' });
 };
 
 // ---------- 이벤트 → 이펙트 ----------
@@ -588,7 +615,7 @@ function updateHud(t) {
 
   $('hp-you-fill').style.width = `${combat.hp}%`;
   $('hp-rival-fill').style.width = `${combat.oppHp}%`;
-  const ping = rtt == null ? '—' : `${Math.round(rtt)}ms`;
+  const ping = mode === 'practice' ? 'PRACTICE' : rtt == null ? '—' : `${Math.round(rtt)}ms`;
   if (match.phase === 'countdown') {
     const left = Math.ceil((match.phaseAt + UI.countdownMs - t) / 1000);
     $('stat-main').textContent = `ROUND ${match.round}`;
@@ -651,9 +678,10 @@ function loop(t) {
   renderWorld(t, dt);
   renderMySword(t);
   updateHud(t);
-  if (net.connected && t - lastPose > 1000 / UI.poseHz) {
+  bot?.update(t, dt);
+  if (linked() && t - lastPose > 1000 / UI.poseHz) {
     lastPose = t;
-    net.send({ t: 'pose', guard: combat.guard, angle: sword.angle, active: sword.active, hp: combat.hp, stunned: combat.stunned(t), exhausted: combat.exhausted });
+    sendOut({ t: 'pose', guard: combat.guard, angle: sword.angle, active: sword.active, hp: combat.hp, stunned: combat.stunned(t), exhausted: combat.exhausted });
   }
   requestAnimationFrame(loop);
 }
@@ -677,4 +705,4 @@ if (roomParam) {
 }
 
 // 콘솔 디버깅용 (예: airDuel.match.phase)
-window.airDuel = { combat, match, net, sword };
+window.airDuel = { combat, match, net, sword, get bot() { return bot; } };
