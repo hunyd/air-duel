@@ -42,11 +42,10 @@ export const GAME_CONFIG = {
 export const LEVELS = ['EASY', 'NORMAL', 'HARD'];
 const rand = (a, b) => a + Math.random() * (b - a);
 const SHAPES = ['circle', 'square', 'triangle', 'hexagon', 'diamond'];
-// 피오라식 급소: 상하좌우 4방향 중 하나. 그 방향에서 '안쪽으로' 휘둘러야 적중
+// 피오라식 급소: 위·좌·우 3방향 중 하나 (아래에서 올려베기는 손목만 꺾게 되어 부자연스러워 제외). 그 방향에서 '안쪽으로' 휘둘러야 적중
 // dir = 필요한 휘두르기 방향(화면 좌표), arc = 표시할 쪽 (캔버스 각도, 0 = 오른쪽)
 const VITALS = {
   UP: { dir: { x: 0, y: 1 }, arc: -Math.PI / 2, label: 'SLASH DOWN' },
-  DOWN: { dir: { x: 0, y: -1 }, arc: Math.PI / 2, label: 'SLASH UP' },
   LEFT: { dir: { x: 1, y: 0 }, arc: Math.PI, label: 'SLASH RIGHT' },
   RIGHT: { dir: { x: -1, y: 0 }, arc: 0, label: 'SLASH LEFT' },
   THRUST: { thrust: true, label: 'THRUST' }, // 찌르기 급소: 원 중앙을 찔러야 적중

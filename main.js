@@ -1,7 +1,7 @@
 import { GestureTracker, GESTURE_CONFIG } from './gestures.js';
 import { Sword, SWORD_CONFIG } from './sword.js';
 import { Game, LEVELS } from './game.js';
-import { drawHand } from './hand.js';
+import { drawHand, drawGripHand } from './hand.js';
 
 const MP_VERSION = '1.2.3'; // SDK와 WASM을 같은 버전으로 고정
 const CONFIG = {
@@ -241,7 +241,8 @@ function drawSkeleton() {
   if (showSkeleton) {
     // 메인 화면: 손 형태로. 칼을 쥐고 있으면 칼자루를 중심으로 축소해서 손이 칼을 감싸 쥐게
     const c = sword.active ? sword.hilt : [0, 5, 9, 13, 17].reduce((a, i) => ({ x: a.x + hand.pts[i].x / 5, y: a.y + hand.pts[i].y / 5 }), { x: 0, y: 0 });
-    drawHand(ctx.skeleton, hand.pts, c, CONFIG.mainSkeletonScale);
+    if (sword.active) drawGripHand(ctx.skeleton, hand.pts, sword, 1); // 주먹은 실제 크기: 칼자루를 감싸 쥔 모양이 읽히게
+    else drawHand(ctx.skeleton, hand.pts, c, CONFIG.mainSkeletonScale);
   }
 
 }
