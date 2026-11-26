@@ -1,7 +1,7 @@
 import { GestureTracker, GESTURE_CONFIG } from './gestures.js';
 import { Sword, SWORD_CONFIG } from './sword.js';
 import { Game, LEVELS } from './game.js';
-import { drawHand, drawGripHand } from './hand.js';
+import { drawHand } from './hand.js';
 
 const MP_VERSION = '1.2.3'; // SDK와 WASM을 같은 버전으로 고정
 const CONFIG = {
@@ -12,7 +12,7 @@ const CONFIG = {
   dwellMs: 650,          // 메뉴 버튼 위에 머무는 시간
   modelTimeoutMs: 45000,
   workerStallMs: 2000,
-  mainSkeletonScale: 0.8, // 메인 화면 손 뼈대 크기 (1 = 실제 크기)
+  mainSkeletonScale: 0.6, // 메인 화면 손 뼈대 크기 (1 = 실제 크기)
   renderDpr: 1,          // 게임 캔버스 해상도 배율 상한 (레티나 2배로 그리면 그리기 비용이 약 3배)
 };
 
@@ -241,8 +241,7 @@ function drawSkeleton() {
   if (showSkeleton) {
     // 메인 화면: 손 형태로. 칼을 쥐고 있으면 칼자루를 중심으로 축소해서 손이 칼을 감싸 쥐게
     const c = sword.active ? sword.hilt : [0, 5, 9, 13, 17].reduce((a, i) => ({ x: a.x + hand.pts[i].x / 5, y: a.y + hand.pts[i].y / 5 }), { x: 0, y: 0 });
-    if (sword.active) drawGripHand(ctx.skeleton, hand.pts, sword); // 주먹은 칼자루 기준으로 그림
-    else drawHand(ctx.skeleton, hand.pts, c, CONFIG.mainSkeletonScale);
+    drawHand(ctx.skeleton, hand.pts, c, CONFIG.mainSkeletonScale);
   }
 
 }
